@@ -73,7 +73,7 @@
 
 ```toml
 [dependencies]
-genetic-algorithm-rust = "0.1.0"
+genetic-algorithm-rust = { git = "https://github.com/fordelkon/genetic-algorithm-rust" }
 ```
 
 在代码中导入时，crate 名称使用下划线形式：
@@ -82,25 +82,36 @@ genetic-algorithm-rust = "0.1.0"
 use genetic_algorithm_rust::*;
 ```
 
-## Quick Start
+## 使用教程
 
-下面这个例子会让 8 个基因尽量逼近目标值 `2.0`，并在运行结束后自动输出一份实验报告。
+如果你是第一次使用这个库，建议按下面这条路径上手：
+
+1. 先把依赖装好并导入 crate
+2. 用 `GaConfig::builder(...)` 配置一个最小可运行实验
+3. 编写 `fitness` 函数
+4. 调用 `run()` 执行算法
+5. 读取最优解并导出报告
+
+下面这个例子会让 8 个基因尽量逼近目标值 `2.0`，并在运行结束后自动输出一份实验报告，适合作为第一次运行的模板。
+
+### 第一步：准备一个最小示例
 
 ```rust
 use genetic_algorithm_rust::{
-    CrossoverType, GaConfig, GeneDomain, GeneScalarType, GeneValue, GenesDomain, GenesValueType,
+    CrossoverType, GaConfig, GeneScalarType, GeneValue, GenesDomain, GenesValueType,
     GeneticAlgorithm, MutationType, SelectionType, StopCondition,
 };
 
-fn main() -> Result<(), Box<dyn std::error::Error>> {
+fn main() {
     let config = GaConfig::builder(100, 8, 100, 12)
         .init_range(-4.0, 4.0)
         .genes_value_type(GenesValueType::All(GeneScalarType::F64))
-        .genes_domain(Some(GenesDomain::Global(GeneDomain::Continuous {
-            low: -4.0,
-            high: 4.0,
-        })))
-        .selection_type(SelectionType::Tournament { k: 3 })
+        .genes_domain(Some(GenesDomain::Global(
+            genetic_algorithm_rust::GeneDomain::Continuous {
+                low: -4.0,
+                high: 4.0,
+            },
+        )))
         .crossover(CrossoverType::SinglePoint, 0.9)
         .mutation(
             MutationType::RandomPerturbation {
@@ -110,34 +121,45 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             0.15,
         )
         .elitism_count(2)
+        .selection_type(SelectionType::Tournament { k: 3 })
         .random_seed(Some(42))
         .stop_condition(StopCondition::MaxGenerations)
-        .build()?;
+        .build()
+        .expect("invalid GA config");
 
     let mut ga = GeneticAlgorithm::new(config, |genes| {
-        let penalty = genes
+        let distance_penalty = genes
             .iter()
             .map(|gene| (gene.to_f64() - 2.0).powi(2))
             .sum::<f64>();
+        100.0 - distance_penalty
+    })
+    .expect("failed to initialize GA");
 
-        100.0 - penalty
-    })?;
+    ga.run().expect("failed to run GA");
+    ga.stats
+        .render_report("output/tournament-f32-seed42")
+        .expect("failed to render report");
 
-    let stats = ga.run()?;
-    let best = ga.best_solution()?;
-
-    println!("Best fitness: {:?}", best.fitness);
+    let best = ga.best_solution().expect("best solution missing");
+    println!(
+        "Best fitness: {:.4}",
+        best.fitness.expect("fitness missing")
+    );
     println!(
         "Best genes: {:?}",
         best.genes.iter().map(GeneValue::to_f64).collect::<Vec<_>>()
     );
-
-    ga.stats.render_report("output/example-run")?;
-
-    println!("Summary: {:?}", stats.summary()?);
-
-    Ok(())
+    println!("Report written to output/tournament-f32-seed42");
 }
+```
+
+### 第二步：运行程序
+
+如果你把上面的代码写在 `src/main.rs` 中，可以直接执行：
+
+```bash
+cargo run
 ```
 
 运行后，你会同时得到：
@@ -146,40 +168,64 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 - 当前种群最优个体 `best_solution()`
 - 一个包含图表与摘要文件的实验输出目录
 
-## Generated Report
+### 第三步：理解这个示例在做什么
+
+这个示例的关键配置可以直接这样理解：
+
+- 种群大小是 `100`
+- 每个个体有 `8` 个基因
+- 搜索空间限制在 `-4.0..=4.0`
+- 目标是让每个基因尽量接近 `2.0`
+- 选择策略使用 `Tournament { k: 3 }`
+- 交叉策略使用 `SinglePoint`
+- 变异策略使用 `RandomPerturbation`
+- `random_seed = 42` 用于复现实验结果
+
+如果你只是想先跑通流程，通常只需要优先调整下面几个参数：
+
+- `population_size`
+- `num_generations`
+- `selection_type`
+- `mutation(...)`
+- `elitism_count`
+- `random_seed`
+
+### 第四步：查看生成的实验报告
 
 调用：
 
 ```rust
-ga.stats.render_report("output/example-run")?;
+ga.stats
+  .render_report("output/tournament-f32-seed42")
+  .expect("failed to render report");
 ```
 
 默认会生成：
 
 ```text
-output/example-run/
-├── fitness_history.svg
+output/tournament-f32-seed42/
 ├── best_genes_final.svg
 ├── best_genes_trajectory.svg
+├── fitness_history.svg
 └── summary.md
 ```
 
 各文件含义如下：
 
-- `fitness_history.svg`
-  - 展示每代 `best fitness`
-  - 展示每代 `average fitness`
-  - 展示平滑后的 `Smoothed Average`
-  - 展示基于 `avg ± std` 的离散度阴影带
 - `best_genes_final.svg`
   - 展示最终全局最优个体各基因值
 - `best_genes_trajectory.svg`
   - 使用单页 small multiples 分面展示每个基因的演化轨迹
   - 如果基因数量超过网格容量，最后一个分面会显示省略提示卡
+- `fitness_history.svg`
+  - 展示每代 `best fitness`
+  - 展示每代 `average fitness`
+  - 展示平滑后的 `Smoothed Average`
+  - 展示基于 `avg ± std` 的离散度阴影带
 - `summary.md`
   - 记录代数、最优值、末代平均值、末代标准差、提升量和最优基因向量
 
-这套输出适合：
+这套输出尤其适合：
 
 - 调试收敛行为
 - 做课程实验截图
@@ -188,7 +234,7 @@ output/example-run/
 
 ## Core Workflow
 
-一次完整使用通常包含 5 步。
+如果你不想直接复制完整示例，也可以按下面的流程自己组装。
 
 ### 1. 定义配置
 
@@ -230,11 +276,19 @@ let fitness = |genes: &[GeneValue]| {
 };
 ```
 
-### 3. 运行算法
+### 3. 初始化并运行算法
 
 ```rust
-let mut ga = GeneticAlgorithm::new(config, fitness)?;
-let stats = ga.run()?;
+let mut ga = GeneticAlgorithm::new(config, |genes| {
+    let distance_penalty = genes
+            .iter()
+            .map(|gene| (gene.to_f64() - 2.0).powi(2))
+            .sum::<f64>();
+        100.0 - distance_penalty
+    })
+    .expect("failed to initialize GA");
+
+ga.run().expect("failed to run GA");
 ```
 
 `run()` 会完成：
@@ -265,7 +319,7 @@ let summary = stats.summary()?;
 ga.stats.render_report("output/my-experiment")?;
 ```
 
-这是最适合第一次使用者上手的路径：跑一次实验，直接查看图与摘要，再决定下一步怎么调参。
+推荐的上手方式是先完整跑通一次，再根据报告里的曲线和摘要回头调参，而不是一开始就同时改很多策略。
 
 ## Configuration Guide
 
