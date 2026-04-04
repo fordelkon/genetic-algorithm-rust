@@ -1,0 +1,10 @@
+[package]
+name = "genetic-algorithm-rust"
+version = "0.1.0"
+authors = ["delkon <2799388816@qq.com>"]
+edition = "2024"
+
+[dependencies]
+plotters = { version = "0.3.7", default-features = false, features = ["svg_backend", "line_series", "area_series"] }
+rand = "0.8"
+rayon = "1.10"

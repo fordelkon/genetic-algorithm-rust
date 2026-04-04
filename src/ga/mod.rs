@@ -1,0 +1,14 @@
+pub mod config;
+pub mod crossover;
+pub mod engine;
+pub mod error;
+pub mod gene;
+pub mod individual;
+pub mod mutation;
+pub mod population;
+pub mod report;
+pub mod rng;
+pub mod selection;
+pub mod stats;
+pub mod stop;
+pub mod visualize;
