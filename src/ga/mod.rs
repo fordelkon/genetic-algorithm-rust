@@ -4,6 +4,7 @@ pub mod engine;
 pub mod error;
 pub mod gene;
 pub mod individual;
+pub mod island;
 pub mod mutation;
 pub mod population;
 pub mod report;
