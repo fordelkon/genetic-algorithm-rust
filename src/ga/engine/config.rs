@@ -67,7 +67,7 @@ pub struct EngineConfig {
 
     pub migration_interval: usize,
 
-    pub migration_topology: MigrationType,
+    pub migration_type: MigrationType,
 }
 
 /// Builder for [`EngineConfig`].
@@ -241,33 +241,21 @@ impl EngineConfig {
         }
 
         if self.num_islands > 1 {
-            self.validate_island_fields()?;
+            if self.migration_count == 0 {
+                return Err(GaError::InvalidConfig(
+                    "migration_count must be at least 1".into(),
+                ));
+            }
+            if self.migration_interval == 0 {
+                return Err(GaError::InvalidConfig(
+                    "migration_interval must be at least 1".into(),
+                ));
+            }
             if self.migration_count >= self.population_size {
                 return Err(GaError::InvalidConfig(
                     "migration_count must be less than population_size".into(),
                 ));
             }
-        }
-
-        Ok(())
-    }
-
-    /// Validates island-model-only fields.
-    pub(crate) fn validate_island_fields(&self) -> Result<(), GaError> {
-        if self.num_islands < 2 {
-            return Err(GaError::InvalidConfig(
-                "island model requires at least 2 islands".into(),
-            ));
-        }
-        if self.migration_count == 0 {
-            return Err(GaError::InvalidConfig(
-                "migration_count must be at least 1".into(),
-            ));
-        }
-        if self.migration_interval == 0 {
-            return Err(GaError::InvalidConfig(
-                "migration_interval must be at least 1".into(),
-            ));
         }
 
         Ok(())
@@ -334,7 +322,7 @@ impl EngineConfigBuilder {
                 num_islands: 1,
                 migration_count: 2,
                 migration_interval: 10,
-                migration_topology: MigrationType::Ring,
+                migration_type: MigrationType::Ring,
             },
         }
     }
@@ -345,12 +333,12 @@ impl EngineConfigBuilder {
         num_islands: usize,
         migration_count: usize,
         migration_interval: usize,
-        migration_topology: MigrationType,
+        migration_type: MigrationType,
     ) -> Self {
         self.config.num_islands = num_islands;
         self.config.migration_count = migration_count;
         self.config.migration_interval = migration_interval;
-        self.config.migration_topology = migration_topology;
+        self.config.migration_type = migration_type;
         self
     }
 

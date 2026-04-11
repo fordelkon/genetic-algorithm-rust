@@ -172,122 +172,45 @@ where
 }
 
 /// Island model genetic algorithm.
-pub struct IslandModel<F>
+pub struct IslandEngine<F>
 where
     F: Fn(&[GeneValue]) -> f64 + Sync + Clone,
 {
     pub num_islands: usize,
     pub migration_count: usize,
     pub migration_interval: usize,
-    pub migration_topology: MigrationType,
+    pub migration_type: MigrationType,
     pub islands: Vec<EngineKernel<F>>,
 }
 
-impl<F> IslandModel<F>
+impl<F> IslandEngine<F>
 where
     F: Fn(&[GeneValue]) -> f64 + Sync + Clone,
 {
-    fn validate_uniform_island_settings(
-        reference: &EngineConfig,
-        config: &EngineConfig,
-        index: usize,
-    ) -> Result<(), GaError> {
-        if config.num_islands <= 1 {
-            return Err(GaError::InvalidConfig(format!(
-                "ga_configs[{index}] must enable island mode via num_islands > 1"
-            )));
-        }
-
-        if config.num_islands != reference.num_islands
-            || config.migration_count != reference.migration_count
-            || config.migration_interval != reference.migration_interval
-            || config.migration_topology != reference.migration_topology
-        {
-            return Err(GaError::InvalidConfig(format!(
-                "ga_configs[{index}] island settings must match the shared island configuration"
-            )));
-        }
-
-        Ok(())
-    }
-
     /// Builds an island model from one shared island configuration.
-    pub fn new(ga_config: EngineConfig, fitness_fn: F) -> Result<Self, GaError> {
-        if ga_config.num_islands <= 1 {
+    pub fn new(config: EngineConfig, fitness_fn: F) -> Result<Self, GaError> {
+        if config.num_islands <= 1 {
             return Err(GaError::InvalidConfig(
-                "num_islands must be greater than 1 for IslandModel::new".into(),
+                "num_islands must be greater than 1 for IslandEngine::new".into(),
             ));
         }
 
-        ga_config.validate()?;
-        ga_config.validate_island_fields()?;
+        config.validate()?;
 
-        let mut islands = Vec::with_capacity(ga_config.num_islands);
-        for i in 0..ga_config.num_islands {
-            let mut config = ga_config.clone();
-            config.random_seed = ga_config
+        let mut islands = Vec::with_capacity(config.num_islands);
+        for i in 0..config.num_islands {
+            let mut config_mut = config.clone();
+            config_mut.random_seed = config
                 .random_seed
                 .map(|seed| seed.wrapping_add(i as u64));
-            islands.push(EngineKernel::new(config, fitness_fn.clone())?);
+            islands.push(EngineKernel::new(config_mut, fitness_fn.clone())?);
         }
 
         Ok(Self {
-            num_islands: ga_config.num_islands,
-            migration_count: ga_config.migration_count,
-            migration_interval: ga_config.migration_interval,
-            migration_topology: ga_config.migration_topology.clone(),
-            islands,
-        })
-    }
-
-    /// Builds an island model from per-island configs with shared migration settings.
-    pub fn with_unified_configs(
-        ga_configs: Vec<EngineConfig>,
-        fitness_fn: F,
-    ) -> Result<Self, GaError> {
-        let Some(first) = ga_configs.first() else {
-            return Err(GaError::InvalidConfig(
-                "ga_configs must contain at least one config".into(),
-            ));
-        };
-
-        if first.num_islands <= 1 {
-            return Err(GaError::InvalidConfig(
-                "all configs must enable island mode via num_islands > 1".into(),
-            ));
-        }
-
-        first.validate_island_fields()?;
-
-        if ga_configs.len() != first.num_islands {
-            return Err(GaError::InvalidConfig(format!(
-                "expected {} GA configs, got {}",
-                first.num_islands,
-                ga_configs.len()
-            )));
-        }
-
-        for (index, config) in ga_configs.iter().enumerate() {
-            config.validate()?;
-            Self::validate_uniform_island_settings(first, config, index)?;
-        }
-
-        let num_islands = first.num_islands;
-        let migration_count = first.migration_count;
-        let migration_interval = first.migration_interval;
-        let migration_topology = first.migration_topology.clone();
-
-        let mut islands = Vec::with_capacity(num_islands);
-        for (i, mut config) in ga_configs.into_iter().enumerate() {
-            config.random_seed = config.random_seed.map(|seed| seed.wrapping_add(i as u64));
-            islands.push(EngineKernel::new(config, fitness_fn.clone())?);
-        }
-
-        Ok(Self {
-            num_islands,
-            migration_count,
-            migration_interval,
-            migration_topology,
+            num_islands: config.num_islands,
+            migration_count: config.migration_count,
+            migration_interval: config.migration_interval,
+            migration_type: config.migration_type.clone(),
             islands,
         })
     }
@@ -303,7 +226,7 @@ where
             .collect();
 
         for (src, src_emigrants) in emigrants.iter().enumerate() {
-            let neighbors = migrate::migrate(&self.migration_topology, src, n);
+            let neighbors = migrate::migrate(&self.migration_type, src, n);
             for &dst in &neighbors {
                 let island = &mut self.islands[dst];
                 island.population.sort_by_fitness_desc();
@@ -319,12 +242,16 @@ where
     }
 
     /// Runs all islands and performs periodic migration.
-    pub fn run(&mut self) -> Result<Vec<&RunStats>, GaError> {
-        for island in &mut self.islands {
+    pub fn run(&mut self) -> Result<Vec<&RunStats>, GaError>
+    where
+        F: Send,
+    {
+        self.islands.par_iter_mut().try_for_each(|island| {
             island.initialize_population()?;
             island.evaluate_population();
             island.stats.record(&island.population)?;
-        }
+            Ok::<(), GaError>(())
+        })?;
 
         let max_generations = self
             .islands
@@ -341,12 +268,13 @@ where
                 .min(max_generations - global_generation);
 
             for _ in 0..steps {
-                for island in &mut self.islands {
+                self.islands.par_iter_mut().try_for_each(|island| {
                     if island.generation < island.config.num_generations {
                         island.next_generation()?;
                         island.generation += 1;
                     }
-                }
+                    Ok::<(), GaError>(())
+                })?;
                 global_generation += 1;
             }
 
@@ -391,7 +319,7 @@ where
     F: Fn(&[GeneValue]) -> f64 + Sync + Clone,
 {
     Single(EngineKernel<F>),
-    Island(IslandModel<F>),
+    Island(IslandEngine<F>),
 }
 
 /// Single entry-point facade that dispatches to the appropriate backend.
@@ -409,7 +337,7 @@ where
     /// Creates a new engine and infers backend from island count.
     pub fn new(config: EngineConfig, fitness_fn: F) -> Result<Self, GaError> {
         let backend = if config.num_islands > 1 {
-            EngineBackend::Island(IslandModel::new(config, fitness_fn)?)
+            EngineBackend::Island(IslandEngine::new(config, fitness_fn)?)
         } else {
             EngineBackend::Single(EngineKernel::new(config, fitness_fn)?)
         };
@@ -418,7 +346,10 @@ where
     }
 
     /// Runs the underlying backend.
-    pub fn run(&mut self) -> Result<EngineRunResult<'_>, GaError> {
+    pub fn run(&mut self) -> Result<EngineRunResult<'_>, GaError>
+    where
+        F: Send,
+    {
         match &mut self.backend {
             EngineBackend::Single(engine) => Ok(EngineRunResult::Single(engine.run()?)),
             EngineBackend::Island(engine) => Ok(EngineRunResult::Island(engine.run()?)),
