@@ -8,7 +8,8 @@ use plotters::{
     series::{AreaSeries, LineSeries},
 };
 
-use crate::ga::{error::GaError, report::ExperimentSummary, stats::RunStats};
+use crate::ga::analysis::{report::ExperimentSummary, stats::RunStats};
+use crate::ga::error::GaError;
 
 /// 控制 GA 实验报告图像输出效果的可视化参数。
 #[derive(Debug, Clone)]

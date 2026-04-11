@@ -1,6 +1,7 @@
 use rand::{Rng, seq::SliceRandom};
 
-use crate::ga::{config::GaConfig, individual::Individual};
+use crate::ga::core::individual::Individual;
+use crate::ga::engine::config::GaConfig;
 
 /// 定义了遗传算法中可用的基因变异策略。
 ///
@@ -259,7 +260,7 @@ fn is_adaptive_mutation(mutation_type: &MutationType) -> bool {
 /// * `true` - 至少有一个基因被成功变异。
 /// * `false` - 当前算子不适用、`mutation_num_genes == 0`，或没有可变异基因。
 fn mutate_fixed_num_genes(
-    genes: &mut [crate::ga::gene::GeneValue],
+    genes: &mut [crate::ga::core::gene::GeneValue],
     config: &GaConfig,
     mutation_type: &MutationType,
     mutation_num_genes: usize,
@@ -309,7 +310,7 @@ fn mutate_fixed_num_genes(
 /// * `true` - 当前基因已被修改。
 /// * `false` - 当前 `mutation_type` 不适用于单基因数值变异。
 fn mutate_gene(
-    gene: &mut crate::ga::gene::GeneValue,
+    gene: &mut crate::ga::core::gene::GeneValue,
     gene_index: usize,
     config: &GaConfig,
     mutation_type: &MutationType,
@@ -368,7 +369,7 @@ fn mutate_gene(
 ///
 /// * `true` - 成功执行了一次交换。
 /// * `false` - 基因数量不足 2，无法完成交换。
-fn swap_genes(genes: &mut [crate::ga::gene::GeneValue], rng: &mut impl Rng) -> bool {
+fn swap_genes(genes: &mut [crate::ga::core::gene::GeneValue], rng: &mut impl Rng) -> bool {
     if genes.len() < 2 {
         return false;
     }
@@ -391,7 +392,7 @@ fn swap_genes(genes: &mut [crate::ga::gene::GeneValue], rng: &mut impl Rng) -> b
 ///
 /// * `true` - 成功对某个区间执行了乱序。
 /// * `false` - 基因数量不足 2，无法形成有效区间。
-fn scramble_genes(genes: &mut [crate::ga::gene::GeneValue], rng: &mut impl Rng) -> bool {
+fn scramble_genes(genes: &mut [crate::ga::core::gene::GeneValue], rng: &mut impl Rng) -> bool {
     let Some((start, end)) = random_subsequence_bounds(genes.len(), rng) else {
         return false;
     };
@@ -408,7 +409,7 @@ fn scramble_genes(genes: &mut [crate::ga::gene::GeneValue], rng: &mut impl Rng) 
 ///
 /// * `true` - 成功对某个区间执行了反转。
 /// * `false` - 基因数量不足 2，无法形成有效区间。
-fn invert_genes(genes: &mut [crate::ga::gene::GeneValue], rng: &mut impl Rng) -> bool {
+fn invert_genes(genes: &mut [crate::ga::core::gene::GeneValue], rng: &mut impl Rng) -> bool {
     let Some((start, end)) = random_subsequence_bounds(genes.len(), rng) else {
         return false;
     };

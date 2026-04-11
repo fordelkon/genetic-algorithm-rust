@@ -1,4 +1,4 @@
-use crate::ga::stats::RunStats;
+use crate::ga::analysis::stats::RunStats;
 
 /// 遗传算法的终止条件策略。
 ///

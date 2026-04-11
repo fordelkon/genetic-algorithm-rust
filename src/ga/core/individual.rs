@@ -1,4 +1,4 @@
-use crate::ga::gene::GeneValue;
+use crate::ga::core::gene::GeneValue;
 
 /// 遗传算法中的“个体”（Individual）。
 ///

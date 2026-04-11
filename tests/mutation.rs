@@ -1,11 +1,8 @@
-use genetic_algorithm_rust::ga::{
-    config::GaConfig,
-    crossover::CrossoverType,
-    gene::{GeneDomain, GeneScalarType, GeneValue, GenesDomain, GenesValueType},
-    individual::Individual,
-    mutation::{self, MutationType},
-    selection::SelectionType,
-    stop::StopCondition,
+use genetic_algorithm_rust::ga::operators::mutation;
+use genetic_algorithm_rust::ga::core::individual::Individual;
+use genetic_algorithm_rust::{
+    CrossoverType, GaConfig, GeneDomain, GeneScalarType, GeneValue, GenesDomain,
+    GenesValueType, MutationType, SelectionType, StopCondition,
 };
 use rand::{SeedableRng, rngs::StdRng};
 

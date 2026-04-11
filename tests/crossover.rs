@@ -1,9 +1,7 @@
-use genetic_algorithm_rust::ga::{
-    crossover::{self, CrossoverType},
-    gene::GeneValue,
-    individual::Individual,
-};
 use rand::{SeedableRng, rngs::StdRng};
+
+use genetic_algorithm_rust::ga::operators::crossover::{self, CrossoverType};
+use genetic_algorithm_rust::ga::core::{gene::GeneValue, individual::Individual};
 
 #[test]
 fn crossover_none_keeps_parent_genes() {

@@ -1,6 +1,6 @@
 use rand::Rng;
 
-use crate::ga::{gene::GeneValue, individual::Individual};
+use crate::ga::core::{gene::GeneValue, individual::Individual};
 
 /// 定义了遗传算法中可用的交叉（重组）策略。
 ///

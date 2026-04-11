@@ -1,4 +1,5 @@
-use crate::ga::{error::GaError, individual::Individual};
+use crate::ga::core::individual::Individual;
+use crate::ga::error::GaError;
 
 /// 遗传算法中的种群（Population）。
 ///

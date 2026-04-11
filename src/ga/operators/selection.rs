@@ -1,6 +1,6 @@
 use rand::Rng;
 
-use crate::ga::{individual::Individual, population::Population};
+use crate::ga::core::{individual::Individual, population::Population};
 
 /// 定义了遗传算法中可用的父代选择策略。
 ///

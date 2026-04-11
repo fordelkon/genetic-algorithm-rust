@@ -1,9 +1,6 @@
-use genetic_algorithm_rust::ga::{
-    gene::GeneValue,
-    individual::Individual,
-    population::Population,
-    selection::{self, SelectionType},
-};
+use genetic_algorithm_rust::ga::core::{individual::Individual, population::Population};
+use genetic_algorithm_rust::ga::operators::selection;
+use genetic_algorithm_rust::{GeneValue, SelectionType};
 use rand::{SeedableRng, rngs::StdRng};
 
 fn population() -> Population {

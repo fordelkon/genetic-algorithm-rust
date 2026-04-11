@@ -1,4 +1,5 @@
-use crate::ga::{error::GaError, stats::RunStats};
+use crate::ga::analysis::stats::RunStats;
+use crate::ga::error::GaError;
 
 /// 单次遗传算法实验的关键摘要指标。
 #[derive(Debug, Clone, PartialEq)]

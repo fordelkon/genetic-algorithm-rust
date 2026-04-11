@@ -1,8 +1,8 @@
 use std::path::Path;
 
-use crate::ga::{
-    error::GaError, gene::GeneValue, population::Population, report::ExperimentSummary, visualize,
-};
+use crate::ga::analysis::{report::ExperimentSummary, visualize};
+use crate::ga::core::{gene::GeneValue, population::Population};
+use crate::ga::error::GaError;
 
 /// 遗传算法运行过程的统计与历史记录器。
 ///

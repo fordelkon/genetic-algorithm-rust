@@ -1,11 +1,82 @@
 use crate::ga::{
-    crossover::CrossoverType,
+    core::gene::{GeneScalarType, GeneValue, GenesDomain, GenesValueType},
     error::GaError,
-    gene::{GeneScalarType, GeneValue, GenesDomain, GenesValueType},
-    mutation::MutationType,
-    selection::SelectionType,
-    stop::StopCondition,
+    operators::crossover::CrossoverType,
+    operators::mutation::MutationType,
+    operators::selection::SelectionType,
+    operators::stop::StopCondition,
 };
+
+/// 引擎执行模式。
+///
+/// - `SinglePopulation`：经典单种群进化。
+/// - `IslandModel`：多岛并行演化并周期迁移。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum EngineExecutionMode {
+    SinglePopulation,
+    IslandModel,
+}
+
+/// 岛屿迁移拓扑。
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum MigrationTopology {
+    Ring,
+    FullyConnected,
+}
+
+impl MigrationTopology {
+    /// 返回给定源岛屿的邻接目标索引。
+    pub fn neighbors(&self, island_index: usize, num_islands: usize) -> Vec<usize> {
+        match self {
+            Self::Ring => vec![(island_index + 1) % num_islands],
+            Self::FullyConnected => (0..num_islands).filter(|&i| i != island_index).collect(),
+        }
+    }
+}
+
+/// 岛屿模型配置。
+#[derive(Debug, Clone)]
+pub struct IslandConfig {
+    pub num_islands: usize,
+    pub migration_count: usize,
+    pub migration_interval: usize,
+    pub topology: MigrationTopology,
+}
+
+impl IslandConfig {
+    pub fn new(
+        num_islands: usize,
+        migration_count: usize,
+        migration_interval: usize,
+        topology: MigrationTopology,
+    ) -> Self {
+        Self {
+            num_islands,
+            migration_count,
+            migration_interval,
+            topology,
+        }
+    }
+
+    pub(crate) fn validate(&self) -> Result<(), GaError> {
+        if self.num_islands < 2 {
+            return Err(GaError::InvalidConfig(
+                "island model requires at least 2 islands".into(),
+            ));
+        }
+        if self.migration_count == 0 {
+            return Err(GaError::InvalidConfig(
+                "migration_count must be at least 1".into(),
+            ));
+        }
+        if self.migration_interval == 0 {
+            return Err(GaError::InvalidConfig(
+                "migration_interval must be at least 1".into(),
+            ));
+        }
+        Ok(())
+    }
+}
 
 /// 遗传算法引擎的核心配置参数。
 ///
@@ -147,6 +218,24 @@ pub struct GaConfig {
     ///
     /// 例如：到达最大代数、达到目标适应度、连续若干代最优值没有提升等。
     pub stop_condition: StopCondition,
+
+    // ==========================================
+    // 引擎执行模式与岛屿参数 (Execution Mode & Island)
+    // ==========================================
+    /// 引擎执行模式（单种群或岛屿模型）。
+    pub execution_mode: EngineExecutionMode,
+
+    /// 岛屿数量。
+    pub num_islands: usize,
+
+    /// 每次迁移每个岛屿输出的精英个体数量。
+    pub migration_count: usize,
+
+    /// 迁移触发间隔（以代为单位）。
+    pub migration_interval: usize,
+
+    /// 岛屿拓扑关系。
+    pub migration_topology: MigrationTopology,
 }
 
 /// [`GaConfig`] 的建造者，用于链式初始化配置。
@@ -160,7 +249,7 @@ pub struct GaConfig {
 /// # 示例 (Examples)
 ///
 /// ```rust
-/// # use genetic_algorithm_rust::ga::{config::GaConfig, crossover::CrossoverType, mutation::MutationType};
+/// # use genetic_algorithm_rust::{CrossoverType, GaConfig, MutationType};
 /// let config = GaConfig::builder(100, 10, 50, 50)
 ///     .crossover(CrossoverType::TwoPoint, 0.85)
 ///     .mutation_probability(0.1)
@@ -340,7 +429,27 @@ impl GaConfig {
             _ => {}
         }
 
+        if self.execution_mode == EngineExecutionMode::IslandModel {
+            let island = self.island_config();
+            island.validate()?;
+            if island.migration_count >= self.population_size {
+                return Err(GaError::InvalidConfig(
+                    "migration_count must be less than population_size".into(),
+                ));
+            }
+        }
+
         Ok(())
+    }
+
+    /// 从统一配置中提取岛屿配置视图。
+    pub fn island_config(&self) -> IslandConfig {
+        IslandConfig::new(
+            self.num_islands,
+            self.migration_count,
+            self.migration_interval,
+            self.migration_topology.clone(),
+        )
     }
 
     /// 返回指定基因索引对应的值类型。
@@ -444,8 +553,35 @@ impl GaConfigBuilder {
                 mutation_num_genes: None,
                 random_seed: None,
                 stop_condition: StopCondition::MaxGenerations,
+                execution_mode: EngineExecutionMode::SinglePopulation,
+                num_islands: 4,
+                migration_count: 2,
+                migration_interval: 10,
+                migration_topology: MigrationTopology::Ring,
             },
         }
+    }
+
+    /// 设置引擎执行模式。
+    pub fn execution_mode(mut self, execution_mode: EngineExecutionMode) -> Self {
+        self.config.execution_mode = execution_mode;
+        self
+    }
+
+    /// 启用岛屿模型，并一次性设置关键参数。
+    pub fn island_model(
+        mut self,
+        num_islands: usize,
+        migration_count: usize,
+        migration_interval: usize,
+        migration_topology: MigrationTopology,
+    ) -> Self {
+        self.config.execution_mode = EngineExecutionMode::IslandModel;
+        self.config.num_islands = num_islands;
+        self.config.migration_count = migration_count;
+        self.config.migration_interval = migration_interval;
+        self.config.migration_topology = migration_topology;
+        self
     }
 
     /// 设置未指定 `genes_domain` 时的默认随机初始化基因上下界。
