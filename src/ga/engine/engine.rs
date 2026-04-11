@@ -216,29 +216,11 @@ where
     }
 
     fn migrate(&mut self) {
-        let k = self.migration_count;
-        let n = self.islands.len();
-
-        let emigrants: Vec<Vec<Individual>> = self
-            .islands
-            .iter()
-            .map(|island| island.population.elite(k))
-            .collect();
-
-        for (src, src_emigrants) in emigrants.iter().enumerate() {
-            let neighbors = migrate::migrate(&self.migration_type, src, n);
-            for &dst in &neighbors {
-                let island = &mut self.islands[dst];
-                island.population.sort_by_fitness_desc();
-                let pop_len = island.population.individuals.len();
-                let replace_start = pop_len.saturating_sub(k);
-                for (j, emigrant) in src_emigrants.iter().enumerate() {
-                    if replace_start + j < pop_len {
-                        island.population.individuals[replace_start + j] = emigrant.clone();
-                    }
-                }
-            }
-        }
+        migrate::migrate(
+            &mut self.islands,
+            &self.migration_type,
+            self.migration_count,
+        );
     }
 
     /// Runs all islands and performs periodic migration.
