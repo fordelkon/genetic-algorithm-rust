@@ -286,12 +286,13 @@ where
         Ok(self.islands.iter().map(|island| &island.stats).collect())
     }
 
-    /// Returns the global best solution across all islands.
-    pub fn best_solution(&self) -> Result<&Individual, GaError> {
+    /// Returns the global best solution and its island index across all islands.
+    pub fn best_solution(&self) -> Result<(usize, &Individual), GaError> {
         self.islands
             .iter()
-            .filter_map(|island| island.best_solution().ok())
-            .max_by(|a, b| {
+            .enumerate()
+            .filter_map(|(index, island)| island.best_solution().ok().map(|best| (index, best)))
+            .max_by(|(_, a), (_, b)| {
                 a.fitness_or_panic()
                     .partial_cmp(&b.fitness_or_panic())
                     .expect("fitness comparison failed")
@@ -299,12 +300,13 @@ where
             .ok_or(GaError::EmptyPopulation)
     }
 
-    /// Returns the global best fitness across all islands.
-    pub fn best_fitness(&self) -> Option<f64> {
+    /// Returns the global best fitness and its island index across all islands.
+    pub fn best_fitness(&self) -> Option<(usize, f64)> {
         self.islands
             .iter()
-            .filter_map(|island| island.stats.best_fitness)
-            .max_by(|a, b| a.partial_cmp(b).expect("fitness comparison failed"))
+            .enumerate()
+            .filter_map(|(index, island)| island.stats.best_fitness.map(|fitness| (index, fitness)))
+            .max_by(|(_, a), (_, b)| a.partial_cmp(b).expect("fitness comparison failed"))
     }
 }
 
@@ -360,7 +362,7 @@ where
     pub fn best_solution(&self) -> Result<&Individual, GaError> {
         match &self.backend {
             EngineBackend::Single(engine) => engine.best_solution(),
-            EngineBackend::Island(engine) => engine.best_solution(),
+            EngineBackend::Island(engine) => engine.best_solution().map(|(_, best)| best),
         }
     }
 
@@ -368,7 +370,7 @@ where
     pub fn best_fitness(&self) -> Option<f64> {
         match &self.backend {
             EngineBackend::Single(engine) => engine.stats.best_fitness,
-            EngineBackend::Island(engine) => engine.best_fitness(),
+            EngineBackend::Island(engine) => engine.best_fitness().map(|(_, fitness)| fitness),
         }
     }
 }
