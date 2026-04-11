@@ -100,7 +100,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         )
         .elitism_count(5)
         .random_seed(Some(42))
-        .stop_condition(StopCondition::MaxGenerations)
+        .stop_condition(StopCondition::Any {
+            target_fitness: None,
+            no_improvement_generations: Some(50),
+        })
         .build()?;
 
     let mut ga = IslandEngine::new(config, |genes| {
@@ -234,7 +237,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .elitism_count(5)
         .selection_type(SelectionType::Tournament { k: 3 })
         .random_seed(Some(42))
-        .stop_condition(StopCondition::MaxGenerations)
+        .stop_condition(StopCondition::Any {
+            target_fitness: None,
+            no_improvement_generations: Some(100),
+        })
         .build()?;
 
     let mut ga = IslandEngine::new(config, |genes| {
@@ -351,7 +357,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .elitism_count(2)
         .selection_type(SelectionType::Tournament { k: 3 })
         .random_seed(Some(42))
-        .stop_condition(StopCondition::MaxGenerations)
+        .stop_condition(StopCondition::Any {
+            target_fitness: None,
+            no_improvement_generations: Some(40),
+        })
         .build()?;
 
     let mut ga = IslandEngine::new(config, |genes| -tsp_tour_length(&decode_tsp_route(genes)))?;
@@ -401,7 +410,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         )
         .elitism_count(2)
         .random_seed(Some(7))
-        .stop_condition(StopCondition::MaxGenerations)
+        .stop_condition(StopCondition::Any {
+            target_fitness: None,
+            no_improvement_generations: Some(60),
+        })
         .build()?;
 
     let mut ga = EngineKernel::new(config, |genes| {

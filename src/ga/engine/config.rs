@@ -234,6 +234,23 @@ impl EngineConfig {
             _ => {}
         }
 
+        match &self.stop_condition {
+            StopCondition::NoImprovement { generations } if *generations == 0 => {
+                return Err(GaError::InvalidConfig(
+                    "no_improvement generations must be greater than 0".into(),
+                ));
+            }
+            StopCondition::Any {
+                no_improvement_generations: Some(generations),
+                ..
+            } if *generations == 0 => {
+                return Err(GaError::InvalidConfig(
+                    "no_improvement_generations must be greater than 0".into(),
+                ));
+            }
+            _ => {}
+        }
+
         if self.num_islands == 0 {
             return Err(GaError::InvalidConfig(
                 "num_islands must be at least 1".into(),

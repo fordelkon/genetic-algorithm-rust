@@ -12,6 +12,29 @@ pub enum StopCondition {
 
     /// Stop when the best fitness does not improve for N generations.
     NoImprovement { generations: usize },
+
+    /// Stop when any configured criterion is met.
+    ///
+    /// `max_generations` is always checked globally by `should_stop`.
+    /// This variant lets you additionally combine target fitness and
+    /// no-improvement criteria with OR semantics.
+    Any {
+        target_fitness: Option<f64>,
+        no_improvement_generations: Option<usize>,
+    },
+}
+
+fn reached_no_improvement_limit(stats: &RunStats, generations: usize) -> bool {
+    let history = &stats.best_fitness_per_generation;
+
+    if history.len() <= generations {
+        return false;
+    }
+
+    let last = *history.last().expect("history should not be empty");
+    let stagnant_slice = &history[history.len() - 1 - generations..history.len() - 1];
+
+    stagnant_slice.iter().all(|fitness| *fitness >= last)
 }
 
 /// Evaluates whether GA execution should stop at the current state.
@@ -22,27 +45,25 @@ pub fn should_stop(
     stats: &RunStats,
     max_generations: usize,
 ) -> bool {
+    if current_generation >= max_generations {
+        return true;
+    }
+
     match condition {
-        StopCondition::MaxGenerations => current_generation >= max_generations,
-        StopCondition::TargetFitness(target) => {
-            current_generation >= max_generations || best_fitness >= *target
-        }
+        StopCondition::MaxGenerations => false,
+        StopCondition::TargetFitness(target) => best_fitness >= *target,
         StopCondition::NoImprovement { generations } => {
-            if current_generation >= max_generations {
-                return true;
-            }
+            reached_no_improvement_limit(stats, *generations)
+        }
+        StopCondition::Any {
+            target_fitness,
+            no_improvement_generations,
+        } => {
+            let target_reached = target_fitness.is_some_and(|target| best_fitness >= target);
+            let no_improvement_reached = no_improvement_generations
+                .is_some_and(|generations| reached_no_improvement_limit(stats, generations));
 
-            let history = &stats.best_fitness_per_generation;
-
-            if history.len() <= *generations {
-                return false;
-            }
-
-            let last = *history.last().expect("history should not be empty");
-
-            let stagnant_slice = &history[history.len() - 1 - generations..history.len() - 1];
-
-            stagnant_slice.iter().all(|fitness| *fitness >= last)
+            target_reached || no_improvement_reached
         }
     }
 }
