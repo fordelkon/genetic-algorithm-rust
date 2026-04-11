@@ -1,9 +1,10 @@
 use rand::Rng;
 
 use crate::ga::error::GaError;
+/// Gene-related data models and normalization utilities.
 
+/// Scalar type of a single gene value.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-/// 单个基因(gene)的标量类型定义
 pub enum GeneScalarType {
     Isize,
     I8,
@@ -21,8 +22,8 @@ pub enum GeneScalarType {
     Object,
 }
 
+/// Runtime representation of a typed gene value.
 #[derive(Debug, Clone, PartialEq)]
-/// 单个基因(gene)的真实值表示
 pub enum GeneValue {
     Isize(isize),
     I8(i8),
@@ -38,35 +39,35 @@ pub enum GeneValue {
     F64(f64),
 }
 
+/// Value type declaration for an entire chromosome.
 #[derive(Debug, Clone)]
-/// 染色体(genes)值类型，全部统一/按基因单独定义
 pub enum GenesValueType {
     All(GeneScalarType),
     PerGene(Vec<GeneScalarType>),
 }
 
+/// Domain definition for a single gene.
 #[derive(Debug, Clone)]
-/// 基因(gene)取值空间，离散域/连续域/等距离散域
 pub enum GeneDomain {
     Discrete(Vec<f64>),
     Continuous { low: f64, high: f64 },
     Stepped { low: f64, high: f64, step: f64 },
 }
 
+/// Domain definition for an entire chromosome.
 #[derive(Debug, Clone)]
-/// 染色体(genes)取值空间，全局统一/按基因单独定义
 pub enum GenesDomain {
     Global(GeneDomain),
     PerGene(Vec<GeneDomain>),
 }
 
 impl GeneScalarType {
-    /// 返回该类型是否是当前版本支持的数值类型
+    /// Returns whether this scalar type is currently supported.
     pub fn is_supported(self) -> bool {
         !matches!(self, Self::Float16 | Self::Object)
     }
 
-    /// 返回类型名称
+    /// Returns the human-readable Rust type name.
     pub fn as_str(self) -> &'static str {
         match self {
             Self::Isize => "isize",
@@ -95,7 +96,7 @@ impl GeneScalarType {
 }
 
 impl GeneValue {
-    /// 返回基因值对应的标量类型
+    /// Returns the scalar type of this value.
     pub fn scalar_type(&self) -> GeneScalarType {
         match self {
             Self::Isize(_) => GeneScalarType::Isize,
@@ -113,7 +114,7 @@ impl GeneValue {
         }
     }
 
-    /// 统一转换为 `f64`，用于 fitness 计算、比较和统计
+    /// Converts the value to f64 for scoring and aggregation.
     pub fn to_f64(&self) -> f64 {
         match self {
             Self::Isize(value) => *value as f64,
@@ -131,7 +132,7 @@ impl GeneValue {
         }
     }
 
-    /// 将一个 `f64` 映射为指定标量类型的真实基因值
+    /// Casts a numeric value into a concrete typed gene value.
     pub fn cast_from_f64(scalar_type: GeneScalarType, value: f64) -> Result<Self, GaError> {
         match scalar_type {
             GeneScalarType::Isize => clamp_rounded(value, isize::MIN as f64, isize::MAX as f64)
@@ -168,7 +169,7 @@ impl GeneValue {
 }
 
 impl GenesValueType {
-    /// 返回染色体(genes)中第`gene_index`个基因的值类型
+    /// Returns the configured value type for a given gene index.
     pub fn value_type_for(&self, gene_index: usize) -> GeneScalarType {
         match self {
             Self::All(value_type) => *value_type,
@@ -178,7 +179,7 @@ impl GenesValueType {
 }
 
 impl GenesDomain {
-    /// 返回染色体(genes)中第`gene_index`个基因的取值空间
+    /// Returns the configured domain for a given gene index.
     pub fn domain_for(&self, gene_index: usize) -> &GeneDomain {
         match self {
             Self::Global(domain) => domain,
@@ -188,8 +189,8 @@ impl GenesDomain {
 }
 
 impl GeneDomain {
-    /// 校检基因(gene)取值空间的合法性
-    pub fn validate(&self) -> Result<(), String> {
+    /// Validates whether this domain definition is internally consistent.
+    pub(crate) fn validate(&self) -> Result<(), String> {
         match self {
             Self::Discrete(values) if values.is_empty() => {
                 Err("discrete gene domain must not be empty".into())
@@ -207,8 +208,8 @@ impl GeneDomain {
         }
     }
 
-    /// 检查取值空间是否与目标标量类型兼容
-    pub fn validate_for_type(&self, scalar_type: GeneScalarType) -> Result<(), GaError> {
+    /// Validates whether this domain can be represented by the target scalar type.
+    pub(crate) fn validate_for_type(&self, scalar_type: GeneScalarType) -> Result<(), GaError> {
         if !scalar_type.is_supported() {
             return Err(GaError::UnsupportedGeneType(scalar_type.as_str().into()));
         }
@@ -254,7 +255,7 @@ impl GeneDomain {
         }
     }
 
-    /// 返回基因(gene)取值空间中随机采样的数值表示
+    /// Samples a numeric value from this domain.
     pub fn sample_numeric(&self, rng: &mut impl Rng) -> f64 {
         match self {
             Self::Discrete(values) => {
@@ -270,7 +271,6 @@ impl GeneDomain {
         }
     }
 
-    /// 返回`value`映射到基因(gene)取值空间中的数值表示
     pub fn normalize_numeric(&self, value: f64) -> f64 {
         match self {
             Self::Discrete(values) => *values

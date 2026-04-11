@@ -1,6 +1,6 @@
 use genetic_algorithm_rust::{
-    CrossoverType, EngineRunResult, EvolutionEngine, GaConfig, GeneScalarType, GeneValue,
-    GenesValueType, MigrationTopology, MutationType, SelectionType, StopCondition,
+    CrossoverType, EngineConfig, EngineRunResult, EvolutionEngine, GeneScalarType, GeneValue,
+    GenesValueType, MigrationType, MutationType, SelectionType, StopCondition,
 };
 
 fn fitness(genes: &[GeneValue]) -> f64 {
@@ -8,8 +8,8 @@ fn fitness(genes: &[GeneValue]) -> f64 {
 }
 
 #[test]
-fn engine_rejects_single_island_mode() {
-    let config = GaConfig::builder(20, 4, 8, 6)
+fn engine_dispatches_single_island_as_single_mode() {
+    let config = EngineConfig::builder(20, 4, 8, 6)
         .genes_value_type(GenesValueType::All(GeneScalarType::F64))
         .crossover(CrossoverType::SinglePoint, 0.8)
         .mutation(
@@ -21,16 +21,26 @@ fn engine_rejects_single_island_mode() {
         )
         .selection_type(SelectionType::Tournament { k: 3 })
         .stop_condition(StopCondition::MaxGenerations)
-        .island_model(1, 1, 3, MigrationTopology::Ring)
+        .island_model(1, 1, 3, MigrationType::Ring)
         .random_seed(Some(11))
-        .build();
+        .build()
+        .unwrap();
 
-    assert!(config.is_err());
+    let mut engine = EvolutionEngine::new(config, fitness).unwrap();
+    let result = engine.run().unwrap();
+
+    match result {
+        EngineRunResult::Single(stats) => {
+            assert!(!stats.best_fitness_per_generation.is_empty());
+            assert!(engine.best_fitness().is_some());
+        }
+        EngineRunResult::Island(_) => panic!("expected single result"),
+    }
 }
 
 #[test]
 fn engine_dispatches_multi_island_mode() {
-    let config = GaConfig::builder(20, 4, 8, 6)
+    let config = EngineConfig::builder(20, 4, 8, 6)
         .genes_value_type(GenesValueType::All(GeneScalarType::F64))
         .crossover(CrossoverType::SinglePoint, 0.8)
         .mutation(
@@ -42,7 +52,7 @@ fn engine_dispatches_multi_island_mode() {
         )
         .selection_type(SelectionType::Tournament { k: 3 })
         .stop_condition(StopCondition::MaxGenerations)
-        .island_model(3, 2, 3, MigrationTopology::Ring)
+        .island_model(3, 2, 3, MigrationType::Ring)
         .random_seed(Some(22))
         .build()
         .unwrap();
@@ -53,7 +63,11 @@ fn engine_dispatches_multi_island_mode() {
     match result {
         EngineRunResult::Island(stats) => {
             assert_eq!(stats.len(), 3);
-            assert!(stats.iter().all(|s| !s.best_fitness_per_generation.is_empty()));
+            assert!(
+                stats
+                    .iter()
+                    .all(|s| !s.best_fitness_per_generation.is_empty())
+            );
             assert!(engine.best_fitness().is_some());
         }
         EngineRunResult::Single(_) => panic!("expected island result"),

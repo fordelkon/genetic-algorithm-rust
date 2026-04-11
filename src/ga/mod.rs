@@ -1,3 +1,4 @@
+/// Genetic algorithm subsystem.
 pub mod analysis;
 pub mod core;
 pub mod engine;

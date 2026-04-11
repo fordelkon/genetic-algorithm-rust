@@ -1,38 +1,31 @@
 use crate::ga::analysis::stats::RunStats;
 use crate::ga::error::GaError;
+/// Experiment-level summary extraction from run statistics.
 
-/// 单次遗传算法实验的关键摘要指标。
+/// Compact summary metrics for a single GA run.
 #[derive(Debug, Clone, PartialEq)]
 pub struct ExperimentSummary {
-    /// 实际记录到的代数数量。
-    ///
-    /// 该值等于所有代际历史向量的长度。
+    /// Number of recorded generations.
     pub generations: usize,
-    /// 整个运行过程中观测到的全局最优适应度。
+    /// Global best fitness across the run.
     pub best_fitness: f64,
-    /// 最后一代种群的平均适应度。
+    /// Average fitness of the final generation.
     pub final_avg_fitness: f64,
-    /// 最后一代种群适应度的标准差。
-    ///
-    /// 可用于衡量算法收敛末期种群内部的离散程度。
+    /// Fitness standard deviation of the final generation.
     pub final_std_fitness: f64,
-    /// 初始代中的最优适应度。
+    /// Best fitness at generation zero.
     pub initial_best_fitness: f64,
-    /// 最后一代中的最优适应度。
+    /// Best fitness at the last generation.
     pub final_best_fitness: f64,
-    /// 末代最优值相对初代最优值的提升量。
+    /// Improvement from initial to final best fitness.
     pub improvement: f64,
-    /// 全局最优个体的基因值，统一转换为 `f64` 便于展示与导出。
+    /// Best solution genes converted to f64 values.
     pub best_genes: Vec<f64>,
 }
 
 impl ExperimentSummary {
-    /// 从一次完整运行的 [`RunStats`] 中提取实验摘要。
-    ///
+    /// Builds a summary from recorded run statistics.
     /// # Errors
-    ///
-    /// 当统计历史为空，或者缺少生成摘要所需的全局最优解/适应度信息时，
-    /// 返回 [`GaError::Visualization`]。
     pub fn from_stats(stats: &RunStats) -> Result<Self, GaError> {
         let generations = stats.best_fitness_per_generation.len();
         if generations == 0 {

@@ -3,18 +3,22 @@ use rayon::prelude::*;
 
 use crate::ga::analysis::stats::RunStats;
 use crate::ga::core::{gene::GeneValue, individual::Individual, population::Population};
-use crate::ga::engine::config::{EngineExecutionMode, GaConfig};
+use crate::ga::engine::config::EngineConfig;
 use crate::ga::error::GaError;
-use crate::ga::{operators::crossover, operators::mutation, operators::selection, operators::stop};
+use crate::ga::{
+    operators::crossover, operators::migrate, operators::mutation, operators::selection,
+    operators::stop,
+};
 
-pub use crate::ga::engine::config::{IslandConfig, MigrationTopology};
+pub use crate::ga::engine::config::MigrationType;
+/// Engine backends and orchestration entry points.
 
-/// 单群体演化的统一执行内核。
+/// Single-population execution kernel.
 pub struct EngineKernel<F>
 where
     F: Fn(&[GeneValue]) -> f64 + Sync,
 {
-    pub config: GaConfig,
+    pub config: EngineConfig,
     pub fitness_fn: F,
     pub population: Population,
     pub generation: usize,
@@ -26,7 +30,8 @@ impl<F> EngineKernel<F>
 where
     F: Fn(&[GeneValue]) -> f64 + Sync,
 {
-    pub fn new(config: GaConfig, fitness_fn: F) -> Result<Self, GaError> {
+    /// Creates a kernel from a validated configuration and fitness function.
+    pub fn new(config: EngineConfig, fitness_fn: F) -> Result<Self, GaError> {
         config.validate()?;
         let rng = Self::build_rng(config.random_seed);
 
@@ -40,6 +45,7 @@ where
         })
     }
 
+    /// Builds a deterministic RNG when seed is provided.
     pub fn build_rng(seed: Option<u64>) -> StdRng {
         match seed {
             Some(value) => StdRng::seed_from_u64(value),
@@ -47,6 +53,7 @@ where
         }
     }
 
+    /// Initializes the first population by sampling genes.
     pub fn initialize_population(&mut self) -> Result<(), GaError> {
         let mut individuals = Vec::with_capacity(self.config.population_size);
 
@@ -61,6 +68,7 @@ where
         Ok(())
     }
 
+    /// Evaluates fitness for all individuals in parallel.
     pub fn evaluate_population(&mut self) {
         self.population
             .individuals
@@ -71,6 +79,7 @@ where
             });
     }
 
+    /// Selects parents using the configured selection policy.
     pub fn select_parents(&mut self) -> Vec<Individual> {
         selection::select_parents(
             &self.population,
@@ -80,6 +89,7 @@ where
         )
     }
 
+    /// Produces offspring by applying crossover.
     pub fn crossover(&mut self, parents: &[Individual]) -> Vec<Individual> {
         let offspring_count = self
             .config
@@ -94,6 +104,7 @@ where
         )
     }
 
+    /// Applies mutation to offspring.
     pub fn mutate(&mut self, offspring: &mut [Individual]) {
         if matches!(
             self.config.mutation_type,
@@ -115,6 +126,7 @@ where
         );
     }
 
+    /// Advances one generation and records run statistics.
     pub fn next_generation(&mut self) -> Result<(), GaError> {
         let parents = self.select_parents();
         let mut offspring = self.crossover(&parents);
@@ -133,6 +145,7 @@ where
         Ok(())
     }
 
+    /// Runs evolution until the configured stop condition is met.
     pub fn run(&mut self) -> Result<&RunStats, GaError> {
         self.initialize_population()?;
         self.evaluate_population();
@@ -152,21 +165,22 @@ where
         Ok(&self.stats)
     }
 
+    /// Returns the current best individual.
     pub fn best_solution(&self) -> Result<&Individual, GaError> {
         self.population.best()
     }
 }
-
-/// 兼容别名：单群体 GA 使用统一内核实现。
-pub type GeneticAlgorithm<F> = EngineKernel<F>;
 
 /// Island model genetic algorithm.
 pub struct IslandModel<F>
 where
     F: Fn(&[GeneValue]) -> f64 + Sync + Clone,
 {
-    pub island_config: IslandConfig,
-    pub islands: Vec<GeneticAlgorithm<F>>,
+    pub num_islands: usize,
+    pub migration_count: usize,
+    pub migration_interval: usize,
+    pub migration_topology: MigrationType,
+    pub islands: Vec<EngineKernel<F>>,
 }
 
 impl<F> IslandModel<F>
@@ -174,21 +188,20 @@ where
     F: Fn(&[GeneValue]) -> f64 + Sync + Clone,
 {
     fn validate_uniform_island_settings(
-        reference: &IslandConfig,
-        config: &GaConfig,
+        reference: &EngineConfig,
+        config: &EngineConfig,
         index: usize,
     ) -> Result<(), GaError> {
-        if config.execution_mode != EngineExecutionMode::IslandModel {
+        if config.num_islands <= 1 {
             return Err(GaError::InvalidConfig(format!(
-                "ga_configs[{index}] must use EngineExecutionMode::IslandModel"
+                "ga_configs[{index}] must enable island mode via num_islands > 1"
             )));
         }
 
-        let island = config.island_config();
-        if island.num_islands != reference.num_islands
-            || island.migration_count != reference.migration_count
-            || island.migration_interval != reference.migration_interval
-            || island.topology != reference.topology
+        if config.num_islands != reference.num_islands
+            || config.migration_count != reference.migration_count
+            || config.migration_interval != reference.migration_interval
+            || config.migration_topology != reference.migration_topology
         {
             return Err(GaError::InvalidConfig(format!(
                 "ga_configs[{index}] island settings must match the shared island configuration"
@@ -198,35 +211,38 @@ where
         Ok(())
     }
 
-    pub fn new(ga_config: GaConfig, fitness_fn: F) -> Result<Self, GaError> {
-        if ga_config.execution_mode != EngineExecutionMode::IslandModel {
+    /// Builds an island model from one shared island configuration.
+    pub fn new(ga_config: EngineConfig, fitness_fn: F) -> Result<Self, GaError> {
+        if ga_config.num_islands <= 1 {
             return Err(GaError::InvalidConfig(
-                "execution_mode must be IslandModel for IslandModel::new".into(),
+                "num_islands must be greater than 1 for IslandModel::new".into(),
             ));
         }
 
         ga_config.validate()?;
-        let island_config = ga_config.island_config();
-        island_config.validate()?;
+        ga_config.validate_island_fields()?;
 
-        let mut islands = Vec::with_capacity(island_config.num_islands);
-        for i in 0..island_config.num_islands {
+        let mut islands = Vec::with_capacity(ga_config.num_islands);
+        for i in 0..ga_config.num_islands {
             let mut config = ga_config.clone();
             config.random_seed = ga_config
                 .random_seed
                 .map(|seed| seed.wrapping_add(i as u64));
-            islands.push(GeneticAlgorithm::new(config, fitness_fn.clone())?);
+            islands.push(EngineKernel::new(config, fitness_fn.clone())?);
         }
 
         Ok(Self {
-            island_config,
+            num_islands: ga_config.num_islands,
+            migration_count: ga_config.migration_count,
+            migration_interval: ga_config.migration_interval,
+            migration_topology: ga_config.migration_topology.clone(),
             islands,
         })
     }
 
-
+    /// Builds an island model from per-island configs with shared migration settings.
     pub fn with_unified_configs(
-        ga_configs: Vec<GaConfig>,
+        ga_configs: Vec<EngineConfig>,
         fitness_fn: F,
     ) -> Result<Self, GaError> {
         let Some(first) = ga_configs.first() else {
@@ -235,42 +251,49 @@ where
             ));
         };
 
-        if first.execution_mode != EngineExecutionMode::IslandModel {
+        if first.num_islands <= 1 {
             return Err(GaError::InvalidConfig(
-                "all configs must use EngineExecutionMode::IslandModel".into(),
+                "all configs must enable island mode via num_islands > 1".into(),
             ));
         }
 
-        let island_config = first.island_config();
-        island_config.validate()?;
+        first.validate_island_fields()?;
 
-        if ga_configs.len() != island_config.num_islands {
+        if ga_configs.len() != first.num_islands {
             return Err(GaError::InvalidConfig(format!(
                 "expected {} GA configs, got {}",
-                island_config.num_islands,
+                first.num_islands,
                 ga_configs.len()
             )));
         }
 
         for (index, config) in ga_configs.iter().enumerate() {
             config.validate()?;
-            Self::validate_uniform_island_settings(&island_config, config, index)?;
+            Self::validate_uniform_island_settings(first, config, index)?;
         }
 
-        let mut islands = Vec::with_capacity(island_config.num_islands);
+        let num_islands = first.num_islands;
+        let migration_count = first.migration_count;
+        let migration_interval = first.migration_interval;
+        let migration_topology = first.migration_topology.clone();
+
+        let mut islands = Vec::with_capacity(num_islands);
         for (i, mut config) in ga_configs.into_iter().enumerate() {
             config.random_seed = config.random_seed.map(|seed| seed.wrapping_add(i as u64));
-            islands.push(GeneticAlgorithm::new(config, fitness_fn.clone())?);
+            islands.push(EngineKernel::new(config, fitness_fn.clone())?);
         }
 
         Ok(Self {
-            island_config,
+            num_islands,
+            migration_count,
+            migration_interval,
+            migration_topology,
             islands,
         })
     }
 
     fn migrate(&mut self) {
-        let k = self.island_config.migration_count;
+        let k = self.migration_count;
         let n = self.islands.len();
 
         let emigrants: Vec<Vec<Individual>> = self
@@ -280,7 +303,7 @@ where
             .collect();
 
         for (src, src_emigrants) in emigrants.iter().enumerate() {
-            let neighbors = self.island_config.topology.neighbors(src, n);
+            let neighbors = migrate::migrate(&self.migration_topology, src, n);
             for &dst in &neighbors {
                 let island = &mut self.islands[dst];
                 island.population.sort_by_fitness_desc();
@@ -295,6 +318,7 @@ where
         }
     }
 
+    /// Runs all islands and performs periodic migration.
     pub fn run(&mut self) -> Result<Vec<&RunStats>, GaError> {
         for island in &mut self.islands {
             island.initialize_population()?;
@@ -313,7 +337,6 @@ where
 
         while global_generation < max_generations {
             let steps = self
-                .island_config
                 .migration_interval
                 .min(max_generations - global_generation);
 
@@ -335,6 +358,7 @@ where
         Ok(self.islands.iter().map(|island| &island.stats).collect())
     }
 
+    /// Returns the global best solution across all islands.
     pub fn best_solution(&self) -> Result<&Individual, GaError> {
         self.islands
             .iter()
@@ -347,6 +371,7 @@ where
             .ok_or(GaError::EmptyPopulation)
     }
 
+    /// Returns the global best fitness across all islands.
     pub fn best_fitness(&self) -> Option<f64> {
         self.islands
             .iter()
@@ -355,7 +380,7 @@ where
     }
 }
 
-/// 统一引擎运行结果。
+/// Unified run result across engine backends.
 pub enum EngineRunResult<'a> {
     Single(&'a RunStats),
     Island(Vec<&'a RunStats>),
@@ -365,11 +390,11 @@ enum EngineBackend<F>
 where
     F: Fn(&[GeneValue]) -> f64 + Sync + Clone,
 {
-    Single(GeneticAlgorithm<F>),
+    Single(EngineKernel<F>),
     Island(IslandModel<F>),
 }
 
-/// 单一入口引擎门面。
+/// Single entry-point facade that dispatches to the appropriate backend.
 pub struct EvolutionEngine<F>
 where
     F: Fn(&[GeneValue]) -> f64 + Sync + Clone,
@@ -381,19 +406,18 @@ impl<F> EvolutionEngine<F>
 where
     F: Fn(&[GeneValue]) -> f64 + Sync + Clone,
 {
-    pub fn new(config: GaConfig, fitness_fn: F) -> Result<Self, GaError> {
-        let backend = match config.execution_mode {
-            EngineExecutionMode::SinglePopulation => {
-                EngineBackend::Single(GeneticAlgorithm::new(config, fitness_fn)?)
-            }
-            EngineExecutionMode::IslandModel => {
-                EngineBackend::Island(IslandModel::new(config, fitness_fn)?)
-            }
+    /// Creates a new engine and infers backend from island count.
+    pub fn new(config: EngineConfig, fitness_fn: F) -> Result<Self, GaError> {
+        let backend = if config.num_islands > 1 {
+            EngineBackend::Island(IslandModel::new(config, fitness_fn)?)
+        } else {
+            EngineBackend::Single(EngineKernel::new(config, fitness_fn)?)
         };
 
         Ok(Self { backend })
     }
 
+    /// Runs the underlying backend.
     pub fn run(&mut self) -> Result<EngineRunResult<'_>, GaError> {
         match &mut self.backend {
             EngineBackend::Single(engine) => Ok(EngineRunResult::Single(engine.run()?)),
@@ -401,6 +425,7 @@ where
         }
     }
 
+    /// Returns the current best solution.
     pub fn best_solution(&self) -> Result<&Individual, GaError> {
         match &self.backend {
             EngineBackend::Single(engine) => engine.best_solution(),
@@ -408,6 +433,7 @@ where
         }
     }
 
+    /// Returns the current best fitness.
     pub fn best_fitness(&self) -> Option<f64> {
         match &self.backend {
             EngineBackend::Single(engine) => engine.stats.best_fitness,

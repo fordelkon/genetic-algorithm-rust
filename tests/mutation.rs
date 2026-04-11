@@ -1,7 +1,7 @@
-use genetic_algorithm_rust::ga::operators::mutation;
 use genetic_algorithm_rust::ga::core::individual::Individual;
+use genetic_algorithm_rust::ga::operators::mutation;
 use genetic_algorithm_rust::{
-    CrossoverType, GaConfig, GeneDomain, GeneScalarType, GeneValue, GenesDomain,
+    CrossoverType, EngineConfig, GeneDomain, GeneScalarType, GeneValue, GenesDomain,
     GenesValueType, MutationType, SelectionType, StopCondition,
 };
 use rand::{SeedableRng, rngs::StdRng};
@@ -14,8 +14,8 @@ fn sort_genes(genes: &mut [GeneValue]) {
     });
 }
 
-fn float_config() -> GaConfig {
-    GaConfig::builder(4, 3, 3, 2)
+fn float_config() -> EngineConfig {
+    EngineConfig::builder(4, 3, 3, 2)
         .init_range(0.0, 5.0)
         .genes_value_type(GenesValueType::All(GeneScalarType::F64))
         .crossover(CrossoverType::None, 0.0)
@@ -90,7 +90,7 @@ fn integer_gene_type_keeps_integer_values_after_mutation() {
         GeneValue::I32(3),
     ])];
     let mut rng = StdRng::seed_from_u64(9);
-    let config = GaConfig::builder(4, 3, 3, 2)
+    let config = EngineConfig::builder(4, 3, 3, 2)
         .init_range(0.0, 5.0)
         .genes_value_type(GenesValueType::All(GeneScalarType::I32))
         .genes_domain(Some(GenesDomain::Global(GeneDomain::Continuous {
@@ -133,7 +133,7 @@ fn random_reset_uses_gene_space_when_present() {
         GeneValue::F64(3.0),
     ])];
     let mut rng = StdRng::seed_from_u64(10);
-    let config = GaConfig::builder(4, 3, 3, 2)
+    let config = EngineConfig::builder(4, 3, 3, 2)
         .init_range(0.0, 5.0)
         .genes_value_type(GenesValueType::All(GeneScalarType::F64))
         .genes_domain(Some(GenesDomain::PerGene(vec![
@@ -186,7 +186,7 @@ fn swap_mutation_reorders_genes_and_clears_fitness() {
     ];
     let mut individuals = vec![Individual::with_fitness(original.clone(), 42.0)];
     let mut rng = StdRng::seed_from_u64(12);
-    let config = GaConfig::builder(4, 4, 3, 2)
+    let config = EngineConfig::builder(4, 4, 3, 2)
         .genes_value_type(GenesValueType::All(GeneScalarType::I32))
         .crossover(CrossoverType::None, 0.0)
         .mutation(MutationType::None, 0.0)
@@ -222,7 +222,7 @@ fn scramble_mutation_scrambles_subsequence_without_changing_members() {
     ];
     let mut individuals = vec![Individual::with_fitness(original.clone(), 42.0)];
     let mut rng = StdRng::seed_from_u64(13);
-    let config = GaConfig::builder(4, 6, 3, 2)
+    let config = EngineConfig::builder(4, 6, 3, 2)
         .genes_value_type(GenesValueType::All(GeneScalarType::I32))
         .crossover(CrossoverType::None, 0.0)
         .mutation(MutationType::None, 0.0)
@@ -258,7 +258,7 @@ fn inversion_mutation_reverses_subsequence_without_changing_members() {
     ];
     let mut individuals = vec![Individual::with_fitness(original.clone(), 42.0)];
     let mut rng = StdRng::seed_from_u64(14);
-    let config = GaConfig::builder(4, 6, 3, 2)
+    let config = EngineConfig::builder(4, 6, 3, 2)
         .genes_value_type(GenesValueType::All(GeneScalarType::I32))
         .crossover(CrossoverType::None, 0.0)
         .mutation(MutationType::None, 0.0)
@@ -293,7 +293,7 @@ fn mutation_num_genes_mutates_exactly_k_genes_for_random_reset() {
     ];
     let mut individuals = vec![Individual::new(original.clone())];
     let mut rng = StdRng::seed_from_u64(15);
-    let config = GaConfig::builder(4, 5, 3, 2)
+    let config = EngineConfig::builder(4, 5, 3, 2)
         .init_range(0.0, 5.0)
         .genes_value_type(GenesValueType::All(GeneScalarType::F64))
         .crossover(CrossoverType::None, 0.0)
@@ -324,7 +324,7 @@ fn mutation_num_genes_mutates_exactly_k_genes_for_random_reset() {
 
 #[test]
 fn mutation_num_genes_is_rejected_when_exceeding_num_genes() {
-    let error = GaConfig::builder(4, 3, 3, 2)
+    let error = EngineConfig::builder(4, 3, 3, 2)
         .mutation_num_genes(4)
         .build()
         .unwrap_err();
@@ -354,7 +354,7 @@ fn adaptive_random_reset_mutates_more_genes_for_low_fitness_individuals() {
         Individual::with_fitness(high_original.clone(), 10.0),
     ];
     let mut rng = StdRng::seed_from_u64(16);
-    let config = GaConfig::builder(4, 4, 3, 2)
+    let config = EngineConfig::builder(4, 4, 3, 2)
         .genes_value_type(GenesValueType::All(GeneScalarType::F64))
         .crossover(CrossoverType::None, 0.0)
         .mutation(MutationType::None, 0.0)
@@ -398,7 +398,7 @@ fn adaptive_random_reset_mutates_more_genes_for_low_fitness_individuals() {
 
 #[test]
 fn adaptive_mutation_gene_counts_are_rejected_when_exceeding_num_genes() {
-    let error = GaConfig::builder(4, 3, 3, 2)
+    let error = EngineConfig::builder(4, 3, 3, 2)
         .mutation(
             MutationType::AdaptiveRandomReset {
                 min: 0.0,

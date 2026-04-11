@@ -1,10 +1,10 @@
 use genetic_algorithm_rust::{
-    CrossoverType, GaConfig, GeneScalarType, GeneValue, GenesValueType, GeneticAlgorithm,
+    CrossoverType, EngineConfig, EngineKernel, GeneScalarType, GeneValue, GenesValueType,
     MutationType, SelectionType, StopCondition,
 };
 
-fn config(seed: u64) -> GaConfig {
-    GaConfig::builder(16, 5, 8, 6)
+fn config(seed: u64) -> EngineConfig {
+    EngineConfig::builder(16, 5, 8, 6)
         .init_range(-3.0, 3.0)
         .genes_value_type(GenesValueType::All(GeneScalarType::F64))
         .crossover(CrossoverType::TwoPoint, 0.8)
@@ -32,8 +32,8 @@ fn fixed_seed_produces_same_result() {
             .sum::<f64>()
     };
 
-    let mut ga1 = GeneticAlgorithm::new(config(11), fitness).unwrap();
-    let mut ga2 = GeneticAlgorithm::new(config(11), fitness).unwrap();
+    let mut ga1 = EngineKernel::new(config(11), fitness).unwrap();
+    let mut ga2 = EngineKernel::new(config(11), fitness).unwrap();
 
     ga1.run().unwrap();
     ga2.run().unwrap();

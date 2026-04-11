@@ -10,21 +10,20 @@ use plotters::{
 
 use crate::ga::analysis::{report::ExperimentSummary, stats::RunStats};
 use crate::ga::error::GaError;
+/// SVG report rendering for GA run statistics.
 
-/// 控制 GA 实验报告图像输出效果的可视化参数。
+/// Rendering parameters for generated report charts.
 #[derive(Debug, Clone)]
 pub struct VisualizationOptions {
-    /// 单张 SVG 图像的宽度（像素）。
+    /// Output image width in pixels.
     pub width: u32,
-    /// 单张 SVG 图像的高度（像素）。
+    /// Output image height in pixels.
     pub height: u32,
-    /// 平滑曲线使用的移动平均窗口大小。
-    ///
-    /// 值越大，曲线越平滑，但对局部波动的保真度越低。
+    /// Moving-average window size for smoothing.
     pub smoothing_window: usize,
-    /// 基因轨迹分面图的列数。
+    /// Number of columns in gene-trajectory panels.
     pub trajectory_columns: usize,
-    /// 基因轨迹分面图的行数。
+    /// Number of rows in gene-trajectory panels.
     pub trajectory_rows: usize,
 }
 
@@ -59,6 +58,7 @@ const TRAJECTORY_COLORS: [RGBColor; 8] = [
     RGBColor(23, 190, 207),
 ];
 
+/// Renders the full report bundle into the provided directory.
 pub fn render_report(
     stats: &RunStats,
     output_dir: &Path,

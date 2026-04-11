@@ -1,6 +1,6 @@
 use genetic_algorithm_rust::{
-    CrossoverType, GaConfig, GeneDomain, GeneScalarType, GeneValue, GenesDomain, GenesValueType,
-    GeneticAlgorithm, MutationType, SelectionType, StopCondition,
+    CrossoverType, EngineConfig, EngineKernel, GeneDomain, GeneScalarType, GeneValue, GenesDomain,
+    GenesValueType, MutationType, SelectionType, StopCondition,
 };
 use rayon::ThreadPoolBuilder;
 use std::{
@@ -12,8 +12,8 @@ use std::{
     time::Duration,
 };
 
-fn base_config() -> GaConfig {
-    GaConfig::builder(20, 6, 10, 8)
+fn base_config() -> EngineConfig {
+    EngineConfig::builder(20, 6, 10, 8)
         .init_range(-2.0, 2.0)
         .genes_value_type(GenesValueType::All(GeneScalarType::F64))
         .genes_domain(Some(GenesDomain::Global(GeneDomain::Continuous {
@@ -38,7 +38,7 @@ fn base_config() -> GaConfig {
 
 #[test]
 fn ga_runs_and_records_history() {
-    let mut ga = GeneticAlgorithm::new(base_config(), |genes| {
+    let mut ga = EngineKernel::new(base_config(), |genes| {
         genes.iter().map(GeneValue::to_f64).sum::<f64>()
     })
     .unwrap();
@@ -51,7 +51,7 @@ fn ga_runs_and_records_history() {
 
 #[test]
 fn ga_records_best_genes_per_generation() {
-    let mut ga = GeneticAlgorithm::new(base_config(), |genes| {
+    let mut ga = EngineKernel::new(base_config(), |genes| {
         genes.iter().map(GeneValue::to_f64).sum::<f64>()
     })
     .unwrap();
@@ -70,7 +70,7 @@ fn ga_records_best_genes_per_generation() {
 
 #[test]
 fn ga_records_fitness_standard_deviation_per_generation() {
-    let mut ga = GeneticAlgorithm::new(base_config(), |genes| {
+    let mut ga = EngineKernel::new(base_config(), |genes| {
         genes.iter().map(GeneValue::to_f64).sum::<f64>()
     })
     .unwrap();
@@ -91,7 +91,7 @@ fn ga_records_fitness_standard_deviation_per_generation() {
 
 #[test]
 fn report_summary_exposes_core_metrics() {
-    let mut ga = GeneticAlgorithm::new(base_config(), |genes| {
+    let mut ga = EngineKernel::new(base_config(), |genes| {
         genes.iter().map(GeneValue::to_f64).sum::<f64>()
     })
     .unwrap();
@@ -109,7 +109,7 @@ fn report_summary_exposes_core_metrics() {
 
 #[test]
 fn report_summary_includes_final_std_fitness() {
-    let mut ga = GeneticAlgorithm::new(base_config(), |genes| {
+    let mut ga = EngineKernel::new(base_config(), |genes| {
         genes.iter().map(GeneValue::to_f64).sum::<f64>()
     })
     .unwrap();
@@ -125,7 +125,7 @@ fn report_summary_includes_final_std_fitness() {
 
 #[test]
 fn render_report_writes_expected_artifacts() {
-    let mut ga = GeneticAlgorithm::new(base_config(), |genes| {
+    let mut ga = EngineKernel::new(base_config(), |genes| {
         genes.iter().map(GeneValue::to_f64).sum::<f64>()
     })
     .unwrap();
@@ -146,7 +146,7 @@ fn render_report_writes_expected_artifacts() {
 
 #[test]
 fn render_report_writes_fitness_history_with_band_and_smoothed_line() {
-    let mut ga = GeneticAlgorithm::new(base_config(), |genes| {
+    let mut ga = EngineKernel::new(base_config(), |genes| {
         genes.iter().map(GeneValue::to_f64).sum::<f64>()
     })
     .unwrap();
@@ -166,14 +166,14 @@ fn render_report_writes_fitness_history_with_band_and_smoothed_line() {
 
 #[test]
 fn render_report_writes_single_page_gene_trajectory_with_omission_card() {
-    let config = GaConfig::builder(20, 13, 10, 8)
+    let config = EngineConfig::builder(20, 13, 10, 8)
         .init_range(-2.0, 2.0)
         .genes_value_type(GenesValueType::All(GeneScalarType::F64))
         .selection_type(SelectionType::Tournament { k: 3 })
         .random_seed(Some(9))
         .build()
         .unwrap();
-    let mut ga = GeneticAlgorithm::new(config, |genes| {
+    let mut ga = EngineKernel::new(config, |genes| {
         genes.iter().map(GeneValue::to_f64).sum::<f64>()
     })
     .unwrap();
@@ -196,7 +196,7 @@ fn render_report_writes_single_page_gene_trajectory_with_omission_card() {
 
 #[test]
 fn initialization_respects_discrete_genes_domain() {
-    let config = GaConfig::builder(20, 6, 10, 8)
+    let config = EngineConfig::builder(20, 6, 10, 8)
         .init_range(-2.0, 2.0)
         .genes_value_type(GenesValueType::All(GeneScalarType::F64))
         .genes_domain(Some(GenesDomain::PerGene(vec![
@@ -229,7 +229,7 @@ fn initialization_respects_discrete_genes_domain() {
         .build()
         .unwrap();
 
-    let mut ga = GeneticAlgorithm::new(config, |genes| {
+    let mut ga = EngineKernel::new(config, |genes| {
         genes.iter().map(GeneValue::to_f64).sum::<f64>()
     })
     .unwrap();
@@ -259,7 +259,7 @@ fn initialization_respects_discrete_genes_domain() {
 
 #[test]
 fn mixed_scalar_types_run_with_real_variants() {
-    let config = GaConfig::builder(12, 4, 6, 4)
+    let config = EngineConfig::builder(12, 4, 6, 4)
         .genes_value_type(GenesValueType::PerGene(vec![
             GeneScalarType::I8,
             GeneScalarType::U16,
@@ -288,7 +288,7 @@ fn mixed_scalar_types_run_with_real_variants() {
         .unwrap();
 
     let mut ga =
-        GeneticAlgorithm::new(config, |genes| genes.iter().map(GeneValue::to_f64).sum()).unwrap();
+        EngineKernel::new(config, |genes| genes.iter().map(GeneValue::to_f64).sum()).unwrap();
     ga.run().unwrap();
 
     let best = ga.best_solution().unwrap();
@@ -300,7 +300,7 @@ fn mixed_scalar_types_run_with_real_variants() {
 
 #[test]
 fn unsupported_float16_gene_type_is_rejected() {
-    let error = GaConfig::builder(8, 2, 4, 2)
+    let error = EngineConfig::builder(8, 2, 4, 2)
         .genes_value_type(GenesValueType::All(GeneScalarType::Float16))
         .build()
         .unwrap_err();
@@ -313,7 +313,7 @@ fn unsupported_float16_gene_type_is_rejected() {
 
 #[test]
 fn unsigned_domain_with_negative_values_is_rejected() {
-    let error = GaConfig::builder(8, 2, 4, 2)
+    let error = EngineConfig::builder(8, 2, 4, 2)
         .genes_value_type(GenesValueType::All(GeneScalarType::U8))
         .genes_domain(Some(GenesDomain::Global(GeneDomain::Continuous {
             low: -1.0,
@@ -330,7 +330,7 @@ fn unsigned_domain_with_negative_values_is_rejected() {
 
 #[test]
 fn ga_runs_with_adaptive_mutation() {
-    let config = GaConfig::builder(20, 6, 8, 8)
+    let config = EngineConfig::builder(20, 6, 8, 8)
         .init_range(-2.0, 2.0)
         .genes_value_type(GenesValueType::All(GeneScalarType::F64))
         .crossover(CrossoverType::SinglePoint, 0.9)
@@ -350,7 +350,7 @@ fn ga_runs_with_adaptive_mutation() {
         .build()
         .unwrap();
 
-    let mut ga = GeneticAlgorithm::new(config, |genes| {
+    let mut ga = EngineKernel::new(config, |genes| {
         genes.iter().map(GeneValue::to_f64).sum::<f64>()
     })
     .unwrap();
@@ -363,7 +363,7 @@ fn ga_runs_with_adaptive_mutation() {
 
 #[test]
 fn evaluate_population_runs_fitness_in_parallel() {
-    let config = GaConfig::builder(64, 4, 1, 2)
+    let config = EngineConfig::builder(64, 4, 1, 2)
         .init_range(-2.0, 2.0)
         .genes_value_type(GenesValueType::All(GeneScalarType::F64))
         .selection_type(SelectionType::Tournament { k: 2 })
@@ -395,7 +395,7 @@ fn evaluate_population_runs_fitness_in_parallel() {
         }
     };
 
-    let mut ga = GeneticAlgorithm::new(config, fitness).unwrap();
+    let mut ga = EngineKernel::new(config, fitness).unwrap();
     ga.initialize_population().unwrap();
 
     ThreadPoolBuilder::new()
