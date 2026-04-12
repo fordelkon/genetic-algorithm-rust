@@ -251,7 +251,15 @@ where
 
             for _ in 0..steps {
                 self.islands.par_iter_mut().try_for_each(|island| {
-                    if island.generation < island.config.num_generations {
+                    let should_stop = stop::should_stop(
+                        &island.config.stop_condition,
+                        island.generation,
+                        island.best_solution()?.fitness_or_panic(),
+                        &island.stats,
+                        island.config.num_generations,
+                    );
+                    
+                    if !should_stop {
                         island.next_generation()?;
                         island.generation += 1;
                     }
