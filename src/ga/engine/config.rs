@@ -7,7 +7,7 @@ use crate::ga::{
     operators::stop::StopCondition,
 };
 
-pub use crate::ga::operators::migrate::MigrationType;
+pub use crate::ga::operators::migration::MigrationType;
 /// Engine configuration and builder APIs.
 
 /// Immutable runtime configuration for one GA run.

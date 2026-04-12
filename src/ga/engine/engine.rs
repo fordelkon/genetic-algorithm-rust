@@ -6,7 +6,7 @@ use crate::ga::core::{gene::GeneValue, individual::Individual, population::Popul
 use crate::ga::engine::config::EngineConfig;
 use crate::ga::error::GaError;
 use crate::ga::{
-    operators::crossover, operators::migrate, operators::mutation, operators::selection,
+    operators::crossover, operators::migration, operators::mutation, operators::selection,
     operators::stop,
 };
 
@@ -216,7 +216,7 @@ where
     }
 
     fn migrate(&mut self) {
-        migrate::migrate(
+        migration::migrate(
             &mut self.islands,
             &self.migration_type,
             self.migration_count,
