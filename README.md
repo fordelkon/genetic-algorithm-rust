@@ -8,20 +8,23 @@ genetic-algorithm-rust
 
 genetic-algorithm-rust 是一个面向实验研究与工程原型的 Rust 遗传算法库。
 
-它提供可组合的选择、交叉、变异和停止策略，支持并行适应度评估、可复现随机种子、以及可视化实验报告输出。项目目标是让你既能快速跑通 GA 工作流，也能在参数对比、实验复现和结果汇报时保持可追踪性。
+它提供可组合的选择、交叉、变异和停止策略，支持单目标 GA 与多目标 NSGA-II、并行适应度评估、可复现随机种子、以及可视化实验报告输出。项目目标是让你既能快速跑通 GA 工作流，也能在参数对比、实验复现和结果汇报时保持可追踪性。
 
 ## 功能特性
 
 - Builder 风格配置：通过 `EngineConfig::builder(...)` 逐步构建实验参数
+- 双优化模式：支持单目标最大化与 `OptimizationMode::Nsga2 { num_objectives }` 多目标优化
 - 丰富算子支持：
   - 选择：`SteadyState`、`Tournament`、`RouletteWheel`、`Rank`、`StochasticUniversalSampling`
   - 交叉：`None`、`SinglePoint`、`TwoPoint`、`Uniform`
   - 变异：`None`、`RandomReset`、`RandomPerturbation`、`Adaptive*`、`Swap`、`Scramble`、`Inversion`
 - 多基因类型：支持整数、无符号整数、浮点数（含混合逐基因类型）
 - 搜索空间建模：支持全局域和逐基因域（离散/连续/步进）
-- 并行评估：基于 Rayon 并行计算 fitness
+- 统一评估接口：单目标使用标量 fitness，多目标使用 `Evaluation::Multi(Vec<f64>)`
+- 并行评估：基于 Rayon 并行计算 fitness / objectives
 - 岛屿模型：支持多岛并行进化与周期迁移
-- 统计与报告：自动输出按代统计与图表（SVG + Markdown）
+- Pareto 前沿导出：支持通过 `pareto_front()` 获取非支配解集和 `ParetoSolution`
+- 统计与报告：自动输出按代统计与图表（SVG + Markdown），包含 NSGA-II 的 Pareto 前沿报告
 
 ## 核心概念
 
@@ -36,8 +39,6 @@ genetic-algorithm-rust 是一个面向实验研究与工程原型的 Rust 遗传
 5. 保留精英并进入下一代
 6. 达到停止条件后输出最优解
 
-在本库中，`EngineKernel` 即单种群 GA 执行核心。
-
 ### Island Model（岛屿模型）
 
 岛屿模型将一个大种群拆分成多个子种群（岛），每个岛独立进化，并按固定间隔执行迁移：
@@ -46,6 +47,17 @@ genetic-algorithm-rust 是一个面向实验研究与工程原型的 Rust 遗传
 - 关键参数：`num_islands`、`migration_count`、`migration_interval`、`migration_topology`
 
 在本库中，`EvolutionEngine` 会根据 `num_islands` 自动选择单岛或岛屿后端。
+
+### NSGA-II / Pareto Front
+
+当问题存在多个相互冲突的目标时，可以将引擎切换到 `OptimizationMode::Nsga2 { num_objectives }`：
+
+- evaluator 返回 `Vec<f64>`，库会自动封装为 `Evaluation::Multi(...)`
+- 目标按“最小化”解释，内部使用非支配排序与 crowding distance 维持解集多样性
+- 单目标模式下常用的 `best_fitness()` / `best_solution()` 在 NSGA-II 模式下不可用，应改用 `pareto_front()`
+- `pareto_front()` 返回 `Vec<ParetoSolution>`，其中包含 `genes`、`objectives`、`rank`、`crowding_distance`
+
+这使得该库既能处理传统标量 fitness 优化，也能直接用于 Pareto 最优解集搜索与可视化分析。
 
 ## 安装方法
 
@@ -56,154 +68,7 @@ genetic-algorithm-rust 是一个面向实验研究与工程原型的 Rust 遗传
 genetic-algorithm-rust = { git = "https://github.com/fordelkon/genetic-algorithm-rust" }
 ```
 
-在代码中导入：
-
-```rust
-use genetic_algorithm_rust::*;
-```
-
 ## 快速开始（代码示例）
-
-下面示例演示一个最小可运行 Island Model（以经典 Rastrigin 测试函数为目标）：
-
-- 4 个岛并行进化
-- 环形迁移
-- 输出全局最优来自第几个岛（`0..n-1`）
-
-```rust
-use genetic_algorithm_rust::{
-    CrossoverType, EngineConfig, GeneDomain, GeneScalarType, GeneValue, GenesDomain,
-    GenesValueType, IslandEngine, MigrationType, MutationType, SelectionType, StopCondition,
-};
-
-fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let config = EngineConfig::builder(100, 8, 300, 20)
-        .init_range(-4.0, 4.0)
-        .genes_value_type(GenesValueType::All(GeneScalarType::F64))
-        .genes_domain(Some(GenesDomain::Global(
-            GeneDomain::Continuous {
-                low: -4.0,
-                high: 4.0,
-            },
-        )))
-        .island_model(4, 5, 20, MigrationType::Ring)
-        .selection_type(SelectionType::Tournament { k: 3 })
-        .crossover(CrossoverType::SinglePoint, 0.8)
-        .mutation(
-            MutationType::AdaptiveRandomPerturbation {
-                min_delta: -0.2,
-                max_delta: 0.2,
-                low_quality_num_genes: 4,
-                high_quality_num_genes: 1,
-            },
-            0.15,
-        )
-        .elitism_count(5)
-        .random_seed(Some(42))
-        .stop_condition(StopCondition::Any {
-            target_fitness: None,
-            no_improvement_generations: Some(50),
-        })
-        .build()?;
-
-    let mut ga = IslandEngine::new(config, |genes| {
-        // Rastrigin: f(x) = 10n + Σ(x_i^2 - 10cos(2πx_i))
-        // GA 默认最大化，这里取负号把最小化目标转成最大化 fitness。
-        let a = 10.0;
-        let n = genes.len() as f64;
-        let f = n * a
-            + genes
-                .iter()
-                .map(|g| {
-                    let x = g.to_f64();
-                    x.powi(2) - a * (2.0 * std::f64::consts::PI * x).cos()
-                })
-                .sum::<f64>();
-        -f
-    })?;
-
-    ga.run()?;
-
-    let (best_island, best) = ga.best_solution()?;
-    println!("best fitness: {:.4}", best.fitness_or_panic());
-    println!("best island: {}", best_island);
-    println!(
-        "best genes: {:?}",
-        best.genes.iter().map(GeneValue::to_f64).collect::<Vec<_>>()
-    );
-
-    // 按岛导出报告，与 src/main.rs 一致
-    for (idx, island) in ga.islands.iter().enumerate() {
-        island
-            .stats
-            .render_report(&format!("output/quick-start/island-{idx}"))?;
-    }
-
-    Ok(())
-}
-```
-
-运行：
-
-```bash
-cargo run
-```
-
-## 配置说明
-
-### 基础配置
-
-- `population_size`: 种群规模
-- `num_genes`: 每个个体基因数
-- `num_generations`: 最大代数
-- `num_parents_mating`: 每代参与交配的父代数
-
-### 关键策略配置
-
-- 选择策略：`selection_type(...)`
-- 交叉策略与概率：`crossover(...)`
-- 变异策略与概率：`mutation(...)`
-- 精英保留：`elitism_count(...)`
-- 随机种子：`random_seed(Some(seed))`
-- 停止条件：`stop_condition(...)`
-
-### 岛屿模型配置
-
-通过 `island_model(...)` 启用：
-
-```rust
-use genetic_algorithm_rust::{EngineConfig, MigrationType};
-
-let config = EngineConfig::builder(200, 16, 300, 24)
-    .island_model(4, 5, 20, MigrationType::Ring)
-    .build()?;
-```
-
-参数含义：
-
-- `num_islands`: 岛数量（>1 时启用）
-- `migration_count`: 每次迁移个体数
-- `migration_interval`: 迁移间隔（代）
-- `migration_topology`: 迁移拓扑（如 Ring）
-
-## 架构设计
-
-- `EngineConfig`：参数模型与校验入口
-- `EngineKernel`：单种群演化执行器
-- `IslandEngine`：多岛执行器（岛间迁移）
-- `EvolutionEngine`：统一入口（自动分派单岛/多岛）
-- `RunStats`：按代统计、摘要与报告导出
-
-执行流（简化）：
-
-1. 构建并校验配置
-2. 初始化种群
-3. 并行评估 fitness
-4. 选择 -> 交叉 -> 变异 -> 精英保留
-5. 更新统计并判断停止条件
-6. 输出最优解与实验报告
-
-## 示例
 
 ### 示例 1：基准函数（连续优化）
 
@@ -381,7 +246,62 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 ```
 
-### 示例 3：单种群（不启用岛模型）
+### 示例 3：NSGA-II（多目标优化）
+
+```rust
+use genetic_algorithm_rust::{
+    CrossoverType, EngineConfig, EvolutionEngine, GeneDomain, GeneScalarType, GeneValue,
+    GenesDomain, GenesValueType, MutationType, OptimizationMode, StopCondition,
+};
+
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let config = EngineConfig::builder(48, 2, 80, 16)
+        .init_range(0.0, 1.0)
+        .genes_value_type(GenesValueType::All(GeneScalarType::F64))
+        .genes_domain(Some(GenesDomain::Global(GeneDomain::Continuous {
+            low: 0.0,
+            high: 1.0,
+        })))
+        .crossover(CrossoverType::SinglePoint, 0.85)
+        .mutation(
+            MutationType::RandomPerturbation {
+                min_delta: -0.15,
+                max_delta: 0.15,
+            },
+            0.2,
+        )
+        .optimization_mode(OptimizationMode::Nsga2 { num_objectives: 2 })
+        .stop_condition(StopCondition::MaxGenerations)
+        .random_seed(Some(19))
+        .build()?;
+
+    let mut engine = EvolutionEngine::new(config, |genes: &[GeneValue]| {
+        let x1 = genes[0].to_f64();
+        let x2 = genes[1].to_f64();
+        let f1 = x1;
+        let g = 1.0 + 9.0 * x2;
+        let f2 = g * (1.0 - (f1 / g).powi(2));
+
+        vec![f1, f2]
+    })?;
+
+    engine.run()?;
+
+    let front = engine.pareto_front()?;
+    println!("pareto front size: {}", front.len());
+    for solution in front.iter().take(5) {
+        println!(
+            "objectives={:?}, rank={}, crowding_distance={:.3}",
+            solution.objectives, solution.rank, solution.crowding_distance
+        );
+    }
+
+    engine.stats.render_report("output/nsga2")?;
+    Ok(())
+}
+```
+
+### 示例 4：单种群（不启用岛模型）
 
 ```rust
 use genetic_algorithm_rust::{
@@ -434,44 +354,83 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 ```
 
-输出目录通常包含：
+运行：
+
+```bash
+cargo run
+```
+
+单目标运行的输出目录通常包含：
 
 - `fitness_history.svg`
 - `best_genes_final.svg`
 - `best_genes_trajectory.svg`
 - `summary.md`
 
-## API 说明（简要）
+NSGA-II 运行的输出目录通常包含：
 
-常用公开类型：
+- `front_size_history.svg`
+- `pareto_front.svg`
+- `summary.md`
 
-- `EngineConfig` / `EngineConfigBuilder`
-- `EngineKernel`
-- `IslandEngine`
-- `EvolutionEngine`
-- `RunStats`
-- `GeneValue` / `GenesDomain` / `GenesValueType`
-- `SelectionType` / `CrossoverType` / `MutationType` / `StopCondition`
+## 配置说明
 
-常用方法：
+### 基础配置
 
-- `EngineConfig::builder(...)`
-- `EngineKernel::new(config, fitness_fn)`
-- `IslandEngine::new(config, fitness_fn)`
-- `EvolutionEngine::new(config, fitness_fn)`
-- `run()`
-- `IslandEngine::best_solution() -> Result<(usize, &Individual), GaError>`
-- `IslandEngine::best_fitness() -> Option<(usize, f64)>`
-- `EvolutionEngine::best_solution() -> Result<&Individual, GaError>`
-- `EvolutionEngine::best_fitness() -> Option<f64>`
-- `stats.summary()` / `stats.render_report(path)`
+- `population_size`: 种群规模
+- `num_genes`: 每个个体基因数
+- `num_generations`: 最大代数
+- `num_parents_mating`: 每代参与交配的父代数
+
+### 关键策略配置
+
+- 选择策略：`selection_type(...)`
+- 交叉策略与概率：`crossover(...)`
+- 变异策略与概率：`mutation(...)`
+- 精英保留：`elitism_count(...)`
+- 随机种子：`random_seed(Some(seed))`
+- 停止条件：`stop_condition(...)`
+- 优化模式：`optimization_mode(...)`
+
+多目标模式补充说明：
+
+- 使用 `OptimizationMode::Nsga2 { num_objectives }` 启用 NSGA-II
+- evaluator 必须返回与 `num_objectives` 一致长度的目标向量
+- 目标默认按“越小越好”处理
+- NSGA-II 模式下不支持 `StopCondition::TargetFitness(...)`
+
+参数含义：
+
+- `num_islands`: 岛数量（>1 时启用）
+- `migration_count`: 每次迁移个体数
+- `migration_interval`: 迁移间隔（代）
+- `migration_topology`: 迁移拓扑（如 Ring）
+
+## 架构设计
+
+- `EngineConfig`：参数模型与校验入口
+- `EngineKernel`：单种群演化执行器
+- `IslandEngine`：多岛执行器（岛间迁移）
+- `EvolutionEngine`：统一入口（自动分派单岛/多岛/NSGA-II）
+- `Evaluation`：统一单目标 / 多目标评估载体
+- `ParetoSolution`：对外暴露的非支配解快照
+- `RunStats`：按代统计、摘要与报告导出
+
+执行流：
+
+1. 构建并校验配置
+2. 初始化种群
+3. 并行评估 fitness 或 objectives
+4. 选择 / 非支配排序 -> 交叉 -> 变异 -> 精英保留
+5. 更新统计并判断停止条件
+6. 输出最优解与实验报告
 
 ## 未来规划（可选）
 
-- 多目标优化支持（如 Pareto-based workflow）
 - 更丰富的迁移拓扑与异构岛策略
 - 更细粒度的并行策略与性能调优开关
 - 更完整的 benchmark 与案例集
+- 更系统的多目标优化示例与实验模板
 
 ## 贡献指南
 

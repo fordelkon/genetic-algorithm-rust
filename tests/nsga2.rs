@@ -5,11 +5,11 @@ use genetic_algorithm_rust::{
 
 fn nsga2_config(num_islands: usize) -> EngineConfig {
     EngineConfig::builder(24, 2, 12, 8)
-        .init_range(-2.0, 2.0)
+        .init_range(0.0, 1.0)
         .genes_value_type(GenesValueType::All(GeneScalarType::F64))
         .genes_domain(Some(GenesDomain::Global(GeneDomain::Continuous {
-            low: -2.0,
-            high: 2.0,
+            low: 0.0,
+            high: 1.0,
         })))
         .crossover(CrossoverType::SinglePoint, 0.85)
         .mutation(
@@ -32,6 +32,15 @@ fn dominates(left: &[f64], right: &[f64]) -> bool {
         && left.iter().zip(right.iter()).any(|(l, r)| l < r)
 }
 
+fn zdt2_2d(genes: &[GeneValue]) -> Vec<f64> {
+    let x1 = genes[0].to_f64();
+    let x2 = genes[1].to_f64();
+    let f1 = x1;
+    let g = 1.0 + 9.0 * x2;
+    let f2 = g * (1.0 - (f1 / g).powi(2));
+    vec![f1, f2]
+}
+
 #[test]
 fn nsga2_rejects_target_fitness_stop_condition() {
     let result = EngineConfig::builder(20, 2, 10, 6)
@@ -43,14 +52,17 @@ fn nsga2_rejects_target_fitness_stop_condition() {
 }
 
 #[test]
+fn zdt2_2d_matches_reference_formula() {
+    let objectives = zdt2_2d(&[GeneValue::F64(0.5), GeneValue::F64(0.25)]);
+
+    assert!((objectives[0] - 0.5).abs() < 1e-12);
+    assert!((objectives[1] - 3.1730769230769234).abs() < 1e-12);
+}
+
+#[test]
 fn nsga2_exposes_a_non_dominated_pareto_front() {
     let config = nsga2_config(1);
-    let mut engine = EvolutionEngine::new(config, |genes: &[GeneValue]| {
-        let x = genes[0].to_f64();
-        let y = genes[1].to_f64();
-        vec![x.powi(2) + y.powi(2), (x - 1.0).powi(2) + (y + 1.0).powi(2)]
-    })
-    .unwrap();
+    let mut engine = EvolutionEngine::new(config, zdt2_2d).unwrap();
 
     engine.run().unwrap();
     let front = engine.pareto_front().unwrap();
@@ -72,12 +84,7 @@ fn nsga2_exposes_a_non_dominated_pareto_front() {
 #[test]
 fn nsga2_island_run_renders_multi_objective_report() {
     let config = nsga2_config(3);
-    let mut engine = EvolutionEngine::new(config, |genes: &[GeneValue]| {
-        let x = genes[0].to_f64();
-        let y = genes[1].to_f64();
-        vec![x.powi(2) + y.powi(2), (x - 1.5).powi(2) + (y - 0.5).powi(2)]
-    })
-    .unwrap();
+    let mut engine = EvolutionEngine::new(config, zdt2_2d).unwrap();
 
     engine.run().unwrap();
 
@@ -90,5 +97,32 @@ fn nsga2_island_run_renders_multi_objective_report() {
 
     assert!(output_dir.join("front_size_history.svg").exists());
     assert!(output_dir.join("pareto_front.svg").exists());
+    assert!(output_dir.join("pareto_priority.svg").exists());
     assert!(output_dir.join("summary.md").exists());
+
+    let front_size_svg = std::fs::read_to_string(output_dir.join("front_size_history.svg")).unwrap();
+    assert!(
+        front_size_svg.contains("<path")
+            || front_size_svg.contains("<polyline")
+            || front_size_svg.contains("<line"),
+        "front size history should contain actual chart primitives"
+    );
+    assert!(front_size_svg.contains("Front 0 Size"));
+    assert!(front_size_svg.contains("Front Count"));
+
+    let pareto_svg = std::fs::read_to_string(output_dir.join("pareto_front.svg")).unwrap();
+    assert!(
+        pareto_svg.contains("<circle") || pareto_svg.contains("<path"),
+        "pareto front should contain plotted points"
+    );
+    assert!(pareto_svg.contains("Rank"));
+    assert!(pareto_svg.contains("Crowding"));
+
+    let priority_svg = std::fs::read_to_string(output_dir.join("pareto_priority.svg")).unwrap();
+    assert!(
+        priority_svg.contains("<rect") || priority_svg.contains("<path"),
+        "priority chart should contain ranked glyphs"
+    );
+    assert!(priority_svg.contains("Crowding Distance"));
+    assert!(priority_svg.contains("NSGA-II Priority"));
 }

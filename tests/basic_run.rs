@@ -145,6 +145,26 @@ fn render_report_writes_expected_artifacts() {
 }
 
 #[test]
+fn render_report_labels_best_gene_axis_with_gene_ids() {
+    let mut ga = EngineKernel::new(base_config(), |genes| {
+        genes.iter().map(GeneValue::to_f64).sum::<f64>()
+    })
+    .unwrap();
+    let stats = ga.run().unwrap();
+
+    let output_dir = std::env::temp_dir().join("ga-report-gene-axis");
+    if output_dir.exists() {
+        std::fs::remove_dir_all(&output_dir).unwrap();
+    }
+
+    stats.render_report(&output_dir).unwrap();
+    let svg = std::fs::read_to_string(output_dir.join("best_genes_final.svg")).unwrap();
+
+    assert!(svg.contains("g0"));
+    assert!(svg.contains("g1"));
+}
+
+#[test]
 fn render_report_writes_fitness_history_with_band_and_smoothed_line() {
     let mut ga = EngineKernel::new(base_config(), |genes| {
         genes.iter().map(GeneValue::to_f64).sum::<f64>()
@@ -160,6 +180,10 @@ fn render_report_writes_fitness_history_with_band_and_smoothed_line() {
     stats.render_report(&output_dir).unwrap();
     let svg = std::fs::read_to_string(output_dir.join("fitness_history.svg")).unwrap();
 
+    assert!(
+        svg.contains("<path") || svg.contains("<polyline") || svg.contains("<line"),
+        "fitness history should contain actual chart primitives"
+    );
     assert!(svg.contains("Average Fitness"));
     assert!(svg.contains("Smoothed Average"));
 }
@@ -191,7 +215,69 @@ fn render_report_writes_single_page_gene_trajectory_with_omission_card() {
     assert!(!output_dir.join("best_genes_trajectory_page_1.svg").exists());
 
     let svg = std::fs::read_to_string(trajectory_path).unwrap();
-    assert!(svg.contains("Additional Genes"));
+    assert!(
+        svg.contains("<path") || svg.contains("<polyline") || svg.contains("<line"),
+        "gene trajectory should contain actual chart primitives"
+    );
+    assert!(svg.contains("Omitted Genes"));
+}
+
+#[test]
+fn render_report_elides_long_best_gene_final_chart_with_ellipsis() {
+    let config = EngineConfig::builder(20, 13, 10, 8)
+        .init_range(-2.0, 2.0)
+        .genes_value_type(GenesValueType::All(GeneScalarType::F64))
+        .selection_type(SelectionType::Tournament { k: 3 })
+        .random_seed(Some(11))
+        .build()
+        .unwrap();
+    let mut ga = EngineKernel::new(config, |genes| {
+        genes.iter().map(GeneValue::to_f64).sum::<f64>()
+    })
+    .unwrap();
+    let stats = ga.run().unwrap();
+
+    let output_dir = std::env::temp_dir().join("ga-report-final-ellipsis");
+    if output_dir.exists() {
+        std::fs::remove_dir_all(&output_dir).unwrap();
+    }
+
+    stats.render_report(&output_dir).unwrap();
+
+    let svg = std::fs::read_to_string(output_dir.join("best_genes_final.svg")).unwrap();
+    assert!(svg.contains("..."));
+    assert!(svg.contains("g0"));
+    assert!(svg.contains("g3"));
+    assert!(svg.contains("g9"));
+    assert!(svg.contains("g12"));
+    assert!(!svg.contains("g4"));
+}
+
+#[test]
+fn render_report_marks_omitted_long_gene_trajectory() {
+    let config = EngineConfig::builder(20, 13, 10, 8)
+        .init_range(-2.0, 2.0)
+        .genes_value_type(GenesValueType::All(GeneScalarType::F64))
+        .selection_type(SelectionType::Tournament { k: 3 })
+        .random_seed(Some(12))
+        .build()
+        .unwrap();
+    let mut ga = EngineKernel::new(config, |genes| {
+        genes.iter().map(GeneValue::to_f64).sum::<f64>()
+    })
+    .unwrap();
+    let stats = ga.run().unwrap();
+
+    let output_dir = std::env::temp_dir().join("ga-report-trajectory-ellipsis");
+    if output_dir.exists() {
+        std::fs::remove_dir_all(&output_dir).unwrap();
+    }
+
+    stats.render_report(&output_dir).unwrap();
+
+    let svg = std::fs::read_to_string(output_dir.join("best_genes_trajectory.svg")).unwrap();
+    assert!(svg.contains("Omitted Genes"));
+    assert!(svg.contains("5"));
 }
 
 #[test]
