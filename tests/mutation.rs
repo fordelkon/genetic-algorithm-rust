@@ -207,7 +207,7 @@ fn swap_mutation_reorders_genes_and_clears_fitness() {
     let mut expected = original.clone();
     sort_genes(&mut expected);
     assert_eq!(mutated, expected);
-    assert!(individuals[0].fitness.is_none());
+    assert!(individuals[0].evaluation.is_none());
 }
 
 #[test]
@@ -243,7 +243,7 @@ fn scramble_mutation_scrambles_subsequence_without_changing_members() {
     let mut expected = original.clone();
     sort_genes(&mut expected);
     assert_eq!(mutated, expected);
-    assert!(individuals[0].fitness.is_none());
+    assert!(individuals[0].evaluation.is_none());
 }
 
 #[test]
@@ -279,7 +279,7 @@ fn inversion_mutation_reverses_subsequence_without_changing_members() {
     let mut expected = original.clone();
     sort_genes(&mut expected);
     assert_eq!(mutated, expected);
-    assert!(individuals[0].fitness.is_none());
+    assert!(individuals[0].evaluation.is_none());
 }
 
 #[test]
@@ -392,7 +392,7 @@ fn adaptive_random_reset_mutates_more_genes_for_low_fitness_individuals() {
     assert!(
         individuals
             .iter()
-            .all(|individual| individual.fitness.is_none())
+            .all(|individual| individual.evaluation.is_none())
     );
 }
 

@@ -1,6 +1,6 @@
 use genetic_algorithm_rust::ga::core::{individual::Individual, population::Population};
 use genetic_algorithm_rust::ga::operators::selection;
-use genetic_algorithm_rust::{GeneValue, SelectionType};
+use genetic_algorithm_rust::{Evaluation, GeneValue, SelectionType};
 use rand::{SeedableRng, rngs::StdRng};
 
 fn population() -> Population {
@@ -33,7 +33,7 @@ fn rank_selection_returns_valid_parents() {
     assert!(
         parents
             .iter()
-            .all(|parent| parent.genes.len() == 2 && parent.fitness.is_some())
+            .all(|parent| parent.genes.len() == 2 && parent.evaluation.is_some())
     );
 }
 
@@ -44,8 +44,8 @@ fn steady_state_selection_returns_top_individuals() {
         selection::select_parents(&population(), &SelectionType::SteadyState, 2, &mut rng);
 
     assert_eq!(parents.len(), 2);
-    assert_eq!(parents[0].fitness, Some(4.0));
-    assert_eq!(parents[1].fitness, Some(3.0));
+    assert_eq!(parents[0].evaluation, Some(Evaluation::Single(4.0)));
+    assert_eq!(parents[1].evaluation, Some(Evaluation::Single(3.0)));
 }
 
 #[test]
@@ -62,6 +62,6 @@ fn stochastic_universal_selection_returns_valid_parents() {
     assert!(
         parents
             .iter()
-            .all(|parent| parent.genes.len() == 2 && parent.fitness.is_some())
+            .all(|parent| parent.genes.len() == 2 && parent.evaluation.is_some())
     );
 }

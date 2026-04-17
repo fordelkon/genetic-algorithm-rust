@@ -1,6 +1,7 @@
 use rand::Rng;
 
 use crate::ga::core::{individual::Individual, population::Population};
+use crate::ga::error::GaError;
 /// Parent selection operators.
 
 /// Supported parent selection strategies.
@@ -40,6 +41,28 @@ pub fn select_parents(
     }
 }
 
+/// Selects parents using NSGA-II binary tournament rules.
+pub fn select_nsga2_parents(
+    population: &Population,
+    num_parents: usize,
+    rng: &mut impl Rng,
+) -> Result<Vec<Individual>, GaError> {
+    let len = population.len();
+    if len == 0 {
+        return Err(GaError::EmptyPopulation);
+    }
+
+    let mut parents = Vec::with_capacity(num_parents);
+    for _ in 0..num_parents {
+        let left = &population.individuals[rng.gen_range(0..len)];
+        let right = &population.individuals[rng.gen_range(0..len)];
+        parents.push(nsga2_better(left, right)?.clone());
+    }
+
+    Ok(parents)
+}
+
+/// Internal helper for steady-state selection.
 fn steady_state_selection(population: &Population, num_parents: usize) -> Vec<Individual> {
     let mut ranked = population.individuals.clone();
     ranked.sort_by(|left, right| {
@@ -51,6 +74,7 @@ fn steady_state_selection(population: &Population, num_parents: usize) -> Vec<In
     ranked.into_iter().take(num_parents).collect()
 }
 
+/// Internal helper for k-way tournament selection.
 fn tournament_selection(
     population: &Population,
     num_parents: usize,
@@ -79,6 +103,7 @@ fn tournament_selection(
     parents
 }
 
+/// Internal helper for roulette-wheel parent selection.
 fn roulette_wheel_selection(
     population: &Population,
     num_parents: usize,
@@ -107,6 +132,7 @@ fn roulette_wheel_selection(
     parents
 }
 
+/// Internal helper for stochastic universal sampling selection.
 fn stochastic_universal_selection(
     population: &Population,
     num_parents: usize,
@@ -140,6 +166,7 @@ fn stochastic_universal_selection(
     parents
 }
 
+/// Internal helper for rank-based parent selection.
 fn rank_selection(
     population: &Population,
     num_parents: usize,
@@ -180,6 +207,7 @@ fn rank_selection(
     parents
 }
 
+/// Builds strictly positive fitness-based weights for probability selection operators.
 fn positive_selection_weights(population: &Population) -> Option<(Vec<f64>, f64)> {
     let min_fitness = population
         .individuals
@@ -204,5 +232,28 @@ fn positive_selection_weights(population: &Population) -> Option<(Vec<f64>, f64)
         None
     } else {
         Some((weights, total))
+    }
+}
+
+/// Chooses the better individual under NSGA-II tournament rules.
+fn nsga2_better<'a>(left: &'a Individual, right: &'a Individual) -> Result<&'a Individual, GaError> {
+    let left_rank = left.rank.ok_or_else(|| {
+        GaError::UnsupportedOperation("NSGA-II rank metadata is missing".into())
+    })?;
+    let right_rank = right.rank.ok_or_else(|| {
+        GaError::UnsupportedOperation("NSGA-II rank metadata is missing".into())
+    })?;
+
+    if left_rank != right_rank {
+        return Ok(if left_rank < right_rank { left } else { right });
+    }
+
+    let left_distance = left.crowding_distance.unwrap_or(f64::NEG_INFINITY);
+    let right_distance = right.crowding_distance.unwrap_or(f64::NEG_INFINITY);
+
+    if left_distance >= right_distance {
+        Ok(left)
+    } else {
+        Ok(right)
     }
 }

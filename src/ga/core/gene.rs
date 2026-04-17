@@ -6,58 +6,91 @@ use crate::ga::error::GaError;
 /// Scalar type of a single gene value.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum GeneScalarType {
+    /// Platform-sized signed integer.
     Isize,
+    /// 8-bit signed integer.
     I8,
+    /// 16-bit signed integer.
     I16,
+    /// 32-bit signed integer.
     I32,
+    /// 64-bit signed integer.
     I64,
+    /// Platform-sized unsigned integer.
     Usize,
+    /// 8-bit unsigned integer.
     U8,
+    /// 16-bit unsigned integer.
     U16,
+    /// 32-bit unsigned integer.
     U32,
+    /// 64-bit unsigned integer.
     U64,
+    /// 32-bit floating-point number.
     F32,
+    /// 64-bit floating-point number.
     F64,
+    /// Placeholder for unsupported half-precision float genes.
     Float16,
+    /// Placeholder for unsupported object-valued genes.
     Object,
 }
 
 /// Runtime representation of a typed gene value.
 #[derive(Debug, Clone, PartialEq)]
 pub enum GeneValue {
+    /// Platform-sized signed integer value.
     Isize(isize),
+    /// 8-bit signed integer value.
     I8(i8),
+    /// 16-bit signed integer value.
     I16(i16),
+    /// 32-bit signed integer value.
     I32(i32),
+    /// 64-bit signed integer value.
     I64(i64),
+    /// Platform-sized unsigned integer value.
     Usize(usize),
+    /// 8-bit unsigned integer value.
     U8(u8),
+    /// 16-bit unsigned integer value.
     U16(u16),
+    /// 32-bit unsigned integer value.
     U32(u32),
+    /// 64-bit unsigned integer value.
     U64(u64),
+    /// 32-bit floating-point value.
     F32(f32),
+    /// 64-bit floating-point value.
     F64(f64),
 }
 
 /// Value type declaration for an entire chromosome.
 #[derive(Debug, Clone)]
 pub enum GenesValueType {
+    /// Uses the same scalar type for every gene.
     All(GeneScalarType),
+    /// Uses an explicit scalar type per gene position.
     PerGene(Vec<GeneScalarType>),
 }
 
 /// Domain definition for a single gene.
 #[derive(Debug, Clone)]
 pub enum GeneDomain {
+    /// Restricts the gene to a finite set of allowed numeric values.
     Discrete(Vec<f64>),
+    /// Allows any value within an inclusive numeric range.
     Continuous { low: f64, high: f64 },
+    /// Allows values on a fixed step grid within an inclusive range.
     Stepped { low: f64, high: f64, step: f64 },
 }
 
 /// Domain definition for an entire chromosome.
 #[derive(Debug, Clone)]
 pub enum GenesDomain {
+    /// Reuses one domain definition for every gene.
     Global(GeneDomain),
+    /// Stores an explicit domain definition per gene position.
     PerGene(Vec<GeneDomain>),
 }
 
@@ -87,6 +120,7 @@ impl GeneScalarType {
         }
     }
 
+    /// Returns whether this scalar type is an unsigned integer variant.
     pub fn is_unsigned(self) -> bool {
         matches!(
             self,
@@ -271,6 +305,7 @@ impl GeneDomain {
         }
     }
 
+    /// Clamps or snaps a numeric value so it fits this domain.
     pub fn normalize_numeric(&self, value: f64) -> f64 {
         match self {
             Self::Discrete(values) => *values
@@ -293,6 +328,7 @@ impl GeneDomain {
     }
 }
 
+/// Internal helper that rounds finite values and clamps them into an inclusive range.
 fn clamp_rounded(value: f64, min: f64, max: f64) -> Result<f64, GaError> {
     if !value.is_finite() {
         return Err(GaError::InvalidConfig("gene value must be finite".into()));

@@ -46,7 +46,7 @@ fn ga_runs_and_records_history() {
 
     assert!(!stats.best_fitness_per_generation.is_empty());
     assert!(stats.best_solution.is_some());
-    assert!(ga.best_solution().unwrap().fitness.is_some());
+    assert!(ga.best_solution().unwrap().evaluation.is_some());
 }
 
 #[test]
@@ -287,8 +287,10 @@ fn mixed_scalar_types_run_with_real_variants() {
         .build()
         .unwrap();
 
-    let mut ga =
-        EngineKernel::new(config, |genes| genes.iter().map(GeneValue::to_f64).sum()).unwrap();
+    let mut ga = EngineKernel::new(config, |genes| {
+        genes.iter().map(GeneValue::to_f64).sum::<f64>()
+    })
+    .unwrap();
     ga.run().unwrap();
 
     let best = ga.best_solution().unwrap();
@@ -358,7 +360,7 @@ fn ga_runs_with_adaptive_mutation() {
     let stats = ga.run().unwrap();
 
     assert!(!stats.best_fitness_per_generation.is_empty());
-    assert!(ga.best_solution().unwrap().fitness.is_some());
+    assert!(ga.best_solution().unwrap().evaluation.is_some());
 }
 
 #[test]
@@ -398,7 +400,7 @@ fn evaluate_population_runs_fitness_in_parallel() {
     let mut ga = EngineKernel::new(config, fitness).unwrap();
     ga.initialize_population().unwrap();
 
-    ThreadPoolBuilder::new()
+    let _ = ThreadPoolBuilder::new()
         .num_threads(4)
         .build()
         .unwrap()

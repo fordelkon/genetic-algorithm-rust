@@ -2,30 +2,29 @@ use crate::ga::analysis::stats::RunStats;
 use crate::ga::error::GaError;
 /// Experiment-level summary extraction from run statistics.
 
-/// Compact summary metrics for a single GA run.
+/// Compact summary metrics for a single-objective GA run.
 #[derive(Debug, Clone, PartialEq)]
 pub struct ExperimentSummary {
-    /// Number of recorded generations.
     pub generations: usize,
-    /// Global best fitness across the run.
     pub best_fitness: f64,
-    /// Average fitness of the final generation.
     pub final_avg_fitness: f64,
-    /// Fitness standard deviation of the final generation.
     pub final_std_fitness: f64,
-    /// Best fitness at generation zero.
     pub initial_best_fitness: f64,
-    /// Best fitness at the last generation.
     pub final_best_fitness: f64,
-    /// Improvement from initial to final best fitness.
     pub improvement: f64,
-    /// Best solution genes converted to f64 values.
     pub best_genes: Vec<f64>,
+}
+
+/// Compact summary metrics for an NSGA-II run.
+#[derive(Debug, Clone, PartialEq)]
+pub struct ParetoExperimentSummary {
+    pub generations: usize,
+    pub final_front_size: usize,
+    pub final_front_count: usize,
 }
 
 impl ExperimentSummary {
     /// Builds a summary from recorded run statistics.
-    /// # Errors
     pub fn from_stats(stats: &RunStats) -> Result<Self, GaError> {
         let generations = stats.best_fitness_per_generation.len();
         if generations == 0 {
@@ -67,6 +66,33 @@ impl ExperimentSummary {
             final_best_fitness,
             improvement: final_best_fitness - initial_best_fitness,
             best_genes,
+        })
+    }
+}
+
+impl ParetoExperimentSummary {
+    pub fn from_stats(stats: &RunStats) -> Result<Self, GaError> {
+        let multi = stats.multi_objective.as_ref().ok_or_else(|| {
+            GaError::Visualization("multi-objective history is unavailable".into())
+        })?;
+
+        let generations = multi.front_0_size_per_generation.len();
+        if generations == 0 {
+            return Err(GaError::Visualization(
+                "cannot summarize an empty NSGA-II run history".into(),
+            ));
+        }
+
+        Ok(Self {
+            generations,
+            final_front_size: *multi
+                .front_0_size_per_generation
+                .last()
+                .expect("non-empty history should have last item"),
+            final_front_count: *multi
+                .front_count_per_generation
+                .last()
+                .expect("non-empty history should have last item"),
         })
     }
 }

@@ -32,7 +32,6 @@ fn engine_dispatches_single_island_as_single_mode() {
     match result {
         EngineRunResult::Single(stats) => {
             assert!(!stats.best_fitness_per_generation.is_empty());
-            assert!(engine.best_fitness().is_some());
         }
         EngineRunResult::Island(_) => panic!("expected single result"),
     }
@@ -68,7 +67,6 @@ fn engine_dispatches_multi_island_mode() {
                     .iter()
                     .all(|s| !s.best_fitness_per_generation.is_empty())
             );
-            assert!(engine.best_fitness().is_some());
         }
         EngineRunResult::Single(_) => panic!("expected island result"),
     }

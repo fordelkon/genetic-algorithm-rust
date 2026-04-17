@@ -10,6 +10,15 @@ use crate::ga::{
 pub use crate::ga::operators::migration::MigrationType;
 /// Engine configuration and builder APIs.
 
+/// Optimization strategy used by the engine.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum OptimizationMode {
+    /// Legacy scalar-fitness maximization.
+    SingleObjective,
+    /// NSGA-II multi-objective optimization with fixed objective vector arity.
+    Nsga2 { num_objectives: usize },
+}
+
 /// Immutable runtime configuration for one GA run.
 #[derive(Debug, Clone)]
 pub struct EngineConfig {
@@ -38,6 +47,8 @@ pub struct EngineConfig {
     pub selection_type: SelectionType,
 
     pub elitism_count: usize,
+
+    pub optimization_mode: OptimizationMode,
 
     // ==========================================
     // Crossover
@@ -131,6 +142,14 @@ impl EngineConfig {
             return Err(GaError::InvalidConfig(
                 "elitism_count must not exceed population_size".into(),
             ));
+        }
+
+        if let OptimizationMode::Nsga2 { num_objectives } = self.optimization_mode {
+            if num_objectives == 0 {
+                return Err(GaError::InvalidConfig(
+                    "NSGA-II requires at least one objective".into(),
+                ));
+            }
         }
 
         if !(0.0..=1.0).contains(&self.crossover_probability) {
@@ -234,6 +253,18 @@ impl EngineConfig {
             _ => {}
         }
 
+        if matches!(self.optimization_mode, OptimizationMode::Nsga2 { .. })
+            && matches!(
+                self.mutation_type,
+                MutationType::AdaptiveRandomReset { .. }
+                    | MutationType::AdaptiveRandomPerturbation { .. }
+            )
+        {
+            return Err(GaError::InvalidConfig(
+                "adaptive mutation is not supported in NSGA-II mode".into(),
+            ));
+        }
+
         match &self.stop_condition {
             StopCondition::NoImprovement { generations } if *generations == 0 => {
                 return Err(GaError::InvalidConfig(
@@ -249,6 +280,14 @@ impl EngineConfig {
                 ));
             }
             _ => {}
+        }
+
+        if matches!(self.optimization_mode, OptimizationMode::Nsga2 { .. })
+            && !matches!(self.stop_condition, StopCondition::MaxGenerations)
+        {
+            return Err(GaError::InvalidConfig(
+                "NSGA-II currently supports only StopCondition::MaxGenerations".into(),
+            ));
         }
 
         if self.num_islands == 0 {
@@ -326,6 +365,7 @@ impl EngineConfigBuilder {
                 genes_domain: None,
                 selection_type: SelectionType::Tournament { k: 3 },
                 elitism_count: 1,
+                optimization_mode: OptimizationMode::SingleObjective,
                 crossover_type: CrossoverType::SinglePoint,
                 crossover_probability: 0.8,
                 mutation_type: MutationType::RandomPerturbation {
@@ -387,6 +427,12 @@ impl EngineConfigBuilder {
     /// Sets elitism count.
     pub fn elitism_count(mut self, elitism_count: usize) -> Self {
         self.config.elitism_count = elitism_count;
+        self
+    }
+
+    /// Sets the optimization mode.
+    pub fn optimization_mode(mut self, optimization_mode: OptimizationMode) -> Self {
+        self.config.optimization_mode = optimization_mode;
         self
     }
 

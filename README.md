@@ -210,7 +210,7 @@ let config = EngineConfig::builder(200, 16, 300, 24)
 ```rust
 use genetic_algorithm_rust::{
     CrossoverType, EngineConfig, GeneDomain, GeneScalarType, GenesDomain,
-    GenesValueType, IslandEngine, MigrationType, MutationType, SelectionType, StopCondition,
+    GenesValueType, EvolutionEngine, MigrationType, MutationType, SelectionType, StopCondition,
 };
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -243,7 +243,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         })
         .build()?;
 
-    let mut ga = IslandEngine::new(config, |genes| {
+    let mut ga = EvolutionEngine::new(config, |genes| {
         // Ackley: 经典多峰函数，常用于测试全局优化能力
         let xs: Vec<f64> = genes.iter().map(|g| g.to_f64()).collect();
         let n = xs.len() as f64;
@@ -276,6 +276,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     println!("best island: {best_island}, best fitness: {best_fitness:.6}");
     println!("best solution genes: {:?}", best_genes);
+    ga.stats.render_report("output/multiple-populations")?;
     Ok(())
 }
 ```
@@ -285,7 +286,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 ```rust
 use genetic_algorithm_rust::{
     CrossoverType, EngineConfig, GeneDomain, GeneScalarType, GeneValue, GenesDomain,
-    GenesValueType, IslandEngine, MigrationType, MutationType, SelectionType, StopCondition,
+    GenesValueType, EvolutionEngine, MigrationType, MutationType, SelectionType, StopCondition,
 };
 
 const DIST: [[f64; 5]; 5] = [
@@ -363,7 +364,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         })
         .build()?;
 
-    let mut ga = IslandEngine::new(config, |genes| -tsp_tour_length(&decode_tsp_route(genes)))?;
+    let mut ga = EvolutionEngine::new(config, |genes| -tsp_tour_length(&decode_tsp_route(genes)))?;
 
     ga.run()?;
 
@@ -375,13 +376,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("best fitness: {:.4}", best.fitness_or_panic());
     println!("best route: {:?}", best_route);
     println!("best tour length: {:.4}", best_length);
-
-    for (idx, island) in ga.islands.iter().enumerate() {
-        island
-            .stats
-            .render_report(&format!("output/tsp-case/island-{idx}"))?;
-    }
-
+    ga.stats.render_report("output/tsp")?;
     Ok(())
 }
 ```
@@ -390,7 +385,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 ```rust
 use genetic_algorithm_rust::{
-    CrossoverType, EngineConfig, EngineKernel, GeneScalarType, GeneValue, MutationType,
+    CrossoverType, EngineConfig, EvolutionEngine, GeneScalarType, GeneValue, MutationType,
     SelectionType, StopCondition,
 };
 
@@ -416,7 +411,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         })
         .build()?;
 
-    let mut ga = EngineKernel::new(config, |genes| {
+    let mut ga = EvolutionEngine::new(config, |genes| {
         // Sphere 函数最小化: f(x)=Σx_i^2, 通过取负号转为最大化 fitness
         -genes
             .iter()
@@ -427,7 +422,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     ga.run()?;
 
-    let best = ga.best_solution()?;
+    let (_, best) = ga.best_solution()?;
     println!("best fitness: {:.6}", best.fitness_or_panic());
     println!(
         "best genes: {:?}",

@@ -92,7 +92,7 @@ pub fn mutate(
         }
 
         if has_mutated {
-            individual.fitness = None;
+            individual.clear_evaluation();
         }
     }
 }

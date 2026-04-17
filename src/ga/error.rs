@@ -13,6 +13,9 @@ pub enum GaError {
     /// Fitness was accessed before evaluation.
     UnevaluatedFitness,
 
+    /// Operation is unsupported for the current optimization mode.
+    UnsupportedOperation(String),
+
     /// The requested gene scalar type is not supported by this crate.
     UnsupportedGeneType(String),
 
@@ -26,6 +29,7 @@ impl Display for GaError {
             Self::InvalidConfig(message) => write!(f, "invalid config: {message}"),
             Self::EmptyPopulation => write!(f, "population is empty"),
             Self::UnevaluatedFitness => write!(f, "fitness is not evaluated"),
+            Self::UnsupportedOperation(message) => write!(f, "unsupported operation: {message}"),
             Self::UnsupportedGeneType(name) => write!(f, "unsupported gene type: {name}"),
             Self::Visualization(message) => write!(f, "visualization error: {message}"),
         }
