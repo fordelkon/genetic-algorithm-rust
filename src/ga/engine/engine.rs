@@ -349,17 +349,38 @@ impl IslandEngine {
                 );
                 nsga2::assign_population_metadata(&mut combined)?;
 
+                let final_front = combined.pareto_front();
+                let final_front_size = final_front.len();
+                let final_front_count = combined
+                    .individuals
+                    .iter()
+                    .filter_map(|individual| individual.rank)
+                    .max()
+                    .map(|rank| rank + 1)
+                    .unwrap_or(0);
+
                 let mut aggregate = self
                     .islands
                     .first()
                     .map(|island| island.stats.clone())
                     .unwrap_or_default();
                 let multi = aggregate.multi_objective.get_or_insert_default();
-                multi.final_pareto_front = combined
-                    .pareto_front()
+                multi.final_pareto_front = final_front
                     .iter()
                     .map(ParetoSolution::from_individual)
                     .collect();
+
+                if let Some(last) = multi.front_0_size_per_generation.last_mut() {
+                    *last = final_front_size;
+                } else {
+                    multi.front_0_size_per_generation.push(final_front_size);
+                }
+
+                if let Some(last) = multi.front_count_per_generation.last_mut() {
+                    *last = final_front_count;
+                } else {
+                    multi.front_count_per_generation.push(final_front_count);
+                }
                 Ok(aggregate)
             }
         }
