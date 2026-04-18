@@ -5,7 +5,6 @@ use rand::Rng;
 use crate::ga::core::{individual::Individual, population::Population};
 use crate::ga::engine::config::OptimizationMode;
 use crate::ga::error::GaError;
-use crate::ga::operators::nsga2;
 /// Parent selection operators.
 
 /// Supported parent selection strategies.
@@ -77,7 +76,7 @@ pub fn sort_survivors(
             ranked.sort_by(single_objective_ordering);
             Ok(ranked)
         }
-        OptimizationMode::Nsga2 { .. } => Ok(nsga2::sorted_population(population)),
+        OptimizationMode::Nsga2 { .. } => Ok(sorted_population(population)),
     }
 }
 
@@ -254,6 +253,30 @@ fn positive_selection_weights(population: &Population) -> Option<(Vec<f64>, f64)
     } else {
         Some((weights, total))
     }
+}
+
+/// Compares two individuals using NSGA-II priority: lower rank first, then higher crowding distance.
+fn nsga2_ordering(left: &Individual, right: &Individual) -> Ordering {
+    let rank_cmp = left
+        .rank
+        .unwrap_or(usize::MAX)
+        .cmp(&right.rank.unwrap_or(usize::MAX));
+    if rank_cmp != Ordering::Equal {
+        return rank_cmp;
+    }
+
+    right
+        .crowding_distance
+        .unwrap_or(f64::NEG_INFINITY)
+        .partial_cmp(&left.crowding_distance.unwrap_or(f64::NEG_INFINITY))
+        .unwrap_or(Ordering::Equal)
+}
+
+/// Returns a cloned list ordered by NSGA-II priority.
+fn sorted_population(population: &Population) -> Vec<Individual> {
+    let mut sorted = population.individuals.clone();
+    sorted.sort_by(nsga2_ordering);
+    sorted
 }
 
 fn single_objective_ordering(left: &Individual, right: &Individual) -> Ordering {

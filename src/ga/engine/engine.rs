@@ -193,10 +193,11 @@ impl EngineKernel {
                 let mut combined_population = Population::new(combined);
                 nsga2::assign_population_metadata(&mut combined_population)?;
 
-                let survivors = nsga2::sorted_population(&combined_population)
-                    .into_iter()
-                    .take(self.config.population_size)
-                    .collect::<Vec<_>>();
+                let survivors = selection::select_survivors(
+                    &combined_population,
+                    &self.config.optimization_mode,
+                    self.config.population_size,
+                )?;
                 self.population = Population::new(survivors);
                 nsga2::assign_population_metadata(&mut self.population)?;
             }

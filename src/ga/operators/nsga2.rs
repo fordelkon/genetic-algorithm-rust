@@ -67,23 +67,6 @@ fn dominates_minimizing(left: &Individual, right: &Individual) -> Result<Dominan
     })
 }
 
-/// Compares two individuals using NSGA-II priority: lower rank first, then higher crowding distance.
-fn nsga2_ordering(left: &Individual, right: &Individual) -> Ordering {
-    let rank_cmp = left
-        .rank
-        .unwrap_or(usize::MAX)
-        .cmp(&right.rank.unwrap_or(usize::MAX));
-    if rank_cmp != Ordering::Equal {
-        return rank_cmp;
-    }
-
-    right
-        .crowding_distance
-        .unwrap_or(f64::NEG_INFINITY)
-        .partial_cmp(&left.crowding_distance.unwrap_or(f64::NEG_INFINITY))
-        .unwrap_or(Ordering::Equal)
-}
-
 /// Evaluates all individuals and refreshes NSGA-II metadata for the population.
 pub fn evaluate_population_with<F>(
     population: &mut Population,
@@ -170,13 +153,6 @@ pub fn assign_population_metadata(population: &mut Population) -> Result<Vec<Vec
     }
 
     Ok(fronts)
-}
-
-/// Returns a cloned list ordered by NSGA-II priority.
-pub fn sorted_population(population: &Population) -> Vec<Individual> {
-    let mut sorted = population.individuals.clone();
-    sorted.sort_by(nsga2_ordering);
-    sorted
 }
 
 fn assign_crowding_distance(population: &mut Population, front: &[usize]) -> Result<(), GaError> {
