@@ -106,9 +106,10 @@ fn render_multi_objective_report(
     output_dir: &Path,
     options: &VisualizationOptions,
 ) -> Result<(), GaError> {
-    let multi = stats.multi_objective.as_ref().ok_or_else(|| {
-        GaError::Visualization("multi-objective history is unavailable".into())
-    })?;
+    let multi = stats
+        .multi_objective
+        .as_ref()
+        .ok_or_else(|| GaError::Visualization("multi-objective history is unavailable".into()))?;
 
     if multi.front_0_size_per_generation.is_empty() {
         return Err(GaError::Visualization(
@@ -151,10 +152,7 @@ fn render_fitness_history(
     root.fill(&BACKGROUND).map_err(plotters_error)?;
 
     let generations = stats.best_fitness_per_generation.len();
-    let smoothed_avg = moving_average(
-        &stats.avg_fitness_per_generation,
-        smoothing_window.max(1),
-    );
+    let smoothed_avg = moving_average(&stats.avg_fitness_per_generation, smoothing_window.max(1));
 
     let mut y_values = Vec::with_capacity(generations * 5);
     for index in 0..generations {
@@ -169,7 +167,10 @@ fn render_fitness_history(
     let (y_min, y_max) = padded_range_from_values(&y_values);
 
     let mut chart = ChartBuilder::on(&root)
-        .caption("GA Fitness History", ("sans-serif", 32).into_font().color(&TEXT))
+        .caption(
+            "GA Fitness History",
+            ("sans-serif", 32).into_font().color(&TEXT),
+        )
         .margin(24)
         .x_label_area_size(48)
         .y_label_area_size(64)
@@ -212,9 +213,7 @@ fn render_fitness_history(
         ))
         .map_err(plotters_error)?
         .label("Best Fitness")
-        .legend(|(x, y)| {
-            PathElement::new(vec![(x, y), (x + 24, y)], BEST_LINE.stroke_width(3))
-        });
+        .legend(|(x, y)| PathElement::new(vec![(x, y), (x + 24, y)], BEST_LINE.stroke_width(3)));
 
     chart
         .draw_series(LineSeries::new(
@@ -227,9 +226,7 @@ fn render_fitness_history(
         ))
         .map_err(plotters_error)?
         .label("Average Fitness")
-        .legend(|(x, y)| {
-            PathElement::new(vec![(x, y), (x + 24, y)], AVERAGE_LINE.stroke_width(2))
-        });
+        .legend(|(x, y)| PathElement::new(vec![(x, y), (x + 24, y)], AVERAGE_LINE.stroke_width(2)));
 
     chart
         .draw_series(LineSeries::new(
@@ -279,7 +276,10 @@ fn render_best_genes_final(
     let x_max = window.slots.len().max(1);
 
     let mut chart = ChartBuilder::on(&root)
-        .caption("Best Solution Genes", ("sans-serif", 32).into_font().color(&TEXT))
+        .caption(
+            "Best Solution Genes",
+            ("sans-serif", 32).into_font().color(&TEXT),
+        )
         .margin(24)
         .x_label_area_size(48)
         .y_label_area_size(64)
@@ -313,17 +313,23 @@ fn render_best_genes_final(
         .map_err(plotters_error)?;
 
     chart
-        .draw_series(window.slots.iter().enumerate().filter_map(|(slot_index, slot)| {
-            let GeneSlot::Visible(gene_index) = slot else {
-                return None;
-            };
-            let left = slot_index;
-            let right = slot_index + 1;
-            Some(Rectangle::new(
-                [(left, 0.0), (right, summary.best_genes[*gene_index])],
-                BAR_FILL.mix(0.75).filled(),
-            ))
-        }))
+        .draw_series(
+            window
+                .slots
+                .iter()
+                .enumerate()
+                .filter_map(|(slot_index, slot)| {
+                    let GeneSlot::Visible(gene_index) = slot else {
+                        return None;
+                    };
+                    let left = slot_index;
+                    let right = slot_index + 1;
+                    Some(Rectangle::new(
+                        [(left, 0.0), (right, summary.best_genes[*gene_index])],
+                        BAR_FILL.mix(0.75).filled(),
+                    ))
+                }),
+        )
         .map_err(plotters_error)?;
 
     root.present().map_err(plotters_error)
@@ -361,7 +367,10 @@ fn render_best_genes_trajectory(
     let (y_min, y_max) = padded_range_from_values(&gene_values);
 
     let mut chart = ChartBuilder::on(&root)
-        .caption("Best Genes Trajectory", ("sans-serif", 32).into_font().color(&TEXT))
+        .caption(
+            "Best Genes Trajectory",
+            ("sans-serif", 32).into_font().color(&TEXT),
+        )
         .margin(24)
         .x_label_area_size(48)
         .y_label_area_size(64)
@@ -432,11 +441,17 @@ fn render_front_size_history(
     let (y_min, y_max) = padded_range_from_values(&y_values);
 
     let mut chart = ChartBuilder::on(&root)
-        .caption("Pareto Front Size History", ("sans-serif", 32).into_font().color(&TEXT))
+        .caption(
+            "Pareto Front Size History",
+            ("sans-serif", 32).into_font().color(&TEXT),
+        )
         .margin(24)
         .x_label_area_size(48)
         .y_label_area_size(64)
-        .build_cartesian_2d(0usize..front_sizes.len().saturating_sub(1).max(1), y_min..y_max)
+        .build_cartesian_2d(
+            0usize..front_sizes.len().saturating_sub(1).max(1),
+            y_min..y_max,
+        )
         .map_err(plotters_error)?;
 
     chart
@@ -462,9 +477,7 @@ fn render_front_size_history(
         ))
         .map_err(plotters_error)?
         .label("Front 0 Size")
-        .legend(|(x, y)| {
-            PathElement::new(vec![(x, y), (x + 24, y)], AVERAGE_LINE.stroke_width(3))
-        });
+        .legend(|(x, y)| PathElement::new(vec![(x, y), (x + 24, y)], AVERAGE_LINE.stroke_width(3)));
 
     chart
         .draw_series(LineSeries::new(
@@ -565,9 +578,7 @@ fn render_pareto_front(
         root.draw(&Text::new(
             format!("Rank {value}"),
             (width as i32 - 180, 44 + offset as i32 * 24),
-            ("sans-serif", 18)
-                .into_font()
-                .color(&rank_color(value)),
+            ("sans-serif", 18).into_font().color(&rank_color(value)),
         ))
         .map_err(plotters_error)?;
     }
@@ -728,7 +739,10 @@ fn compare_nsga2_priority(
 }
 
 fn unique_ranks(solutions: &[crate::ga::core::pareto::ParetoSolution]) -> Vec<usize> {
-    let mut ranks = solutions.iter().map(|solution| solution.rank).collect::<Vec<_>>();
+    let mut ranks = solutions
+        .iter()
+        .map(|solution| solution.rank)
+        .collect::<Vec<_>>();
     ranks.sort_unstable();
     ranks.dedup();
     ranks
@@ -766,11 +780,11 @@ fn visible_gene_window(total_genes: usize, keep_each_side: usize) -> VisibleGene
         };
     }
 
-    let mut slots = (0..keep_each_side).map(GeneSlot::Visible).collect::<Vec<_>>();
+    let mut slots = (0..keep_each_side)
+        .map(GeneSlot::Visible)
+        .collect::<Vec<_>>();
     slots.push(GeneSlot::Ellipsis);
-    slots.extend(
-        (total_genes - keep_each_side..total_genes).map(GeneSlot::Visible),
-    );
+    slots.extend((total_genes - keep_each_side..total_genes).map(GeneSlot::Visible));
 
     VisibleGeneWindow {
         slots,
@@ -787,7 +801,11 @@ fn padded_range_from_values(values: &[f64]) -> (f64, f64) {
     }
 
     if (max - min).abs() < f64::EPSILON {
-        let pad = if min.abs() < 1.0 { 1.0 } else { min.abs() * 0.1 };
+        let pad = if min.abs() < 1.0 {
+            1.0
+        } else {
+            min.abs() * 0.1
+        };
         min -= pad;
         max += pad;
         return (min, max);
@@ -818,9 +836,7 @@ fn write_multi_summary(stats: &RunStats, path: &Path) -> Result<(), GaError> {
         path,
         format!(
             "# NSGA-II Summary\n\ngenerations: {}\nfinal_front_size: {}\nfinal_front_count: {}\n",
-            summary.generations,
-            summary.final_front_size,
-            summary.final_front_count
+            summary.generations, summary.final_front_size, summary.final_front_count
         ),
     )
     .map_err(io_error)

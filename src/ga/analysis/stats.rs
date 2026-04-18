@@ -1,11 +1,7 @@
 use std::path::Path;
 
 use crate::ga::analysis::{report::ExperimentSummary, visualize};
-use crate::ga::core::{
-    gene::GeneValue,
-    pareto::ParetoSolution,
-    population::Population,
-};
+use crate::ga::core::{gene::GeneValue, pareto::ParetoSolution, population::Population};
 use crate::ga::engine::config::OptimizationMode;
 use crate::ga::error::GaError;
 /// Runtime statistics tracking for GA evolution.
@@ -68,10 +64,11 @@ impl RunStats {
 
     fn record_single(&mut self, population: &Population) -> Result<(), GaError> {
         let best = population.best()?;
-        let avg = population.average_fitness()?;
-        let std_dev = population.fitness_std_dev()?;
+        let avg = average_fitness(population)?;
+        let std_dev = fitness_std_dev(population)?;
 
-        self.best_fitness_per_generation.push(best.fitness_or_panic());
+        self.best_fitness_per_generation
+            .push(best.fitness_or_panic());
         self.avg_fitness_per_generation.push(avg);
         self.std_fitness_per_generation.push(std_dev);
         self.best_genes_per_generation.push(best.genes.clone());
@@ -89,7 +86,9 @@ impl RunStats {
 
     fn record_multi(&mut self, population: &Population) -> Result<(), GaError> {
         let front = population.pareto_front();
-        let multi = self.multi_objective.get_or_insert_with(MultiObjectiveStats::default);
+        let multi = self
+            .multi_objective
+            .get_or_insert_with(MultiObjectiveStats::default);
         multi.front_0_size_per_generation.push(front.len());
 
         let max_rank = population
@@ -137,4 +136,31 @@ impl RunStats {
             &visualize::VisualizationOptions::default(),
         )
     }
+}
+
+fn average_fitness(population: &Population) -> Result<f64, GaError> {
+    if population.is_empty() {
+        return Err(GaError::EmptyPopulation);
+    }
+
+    let total = population
+        .individuals
+        .iter()
+        .map(|individual| individual.fitness_or_panic())
+        .sum::<f64>();
+    Ok(total / population.len() as f64)
+}
+
+fn fitness_std_dev(population: &Population) -> Result<f64, GaError> {
+    let mean = average_fitness(population)?;
+    let variance = population
+        .individuals
+        .iter()
+        .map(|individual| {
+            let delta = individual.fitness_or_panic() - mean;
+            delta * delta
+        })
+        .sum::<f64>()
+        / population.len() as f64;
+    Ok(variance.sqrt())
 }

@@ -1,7 +1,11 @@
+use std::cmp::Ordering;
+
 use rand::Rng;
 
 use crate::ga::core::{individual::Individual, population::Population};
+use crate::ga::engine::config::OptimizationMode;
 use crate::ga::error::GaError;
+use crate::ga::operators::nsga2;
 /// Parent selection operators.
 
 /// Supported parent selection strategies.
@@ -62,15 +66,37 @@ pub fn select_nsga2_parents(
     Ok(parents)
 }
 
+/// Returns the population sorted by survivor priority for the active optimization mode.
+pub fn sort_survivors(
+    population: &Population,
+    optimization_mode: &OptimizationMode,
+) -> Result<Vec<Individual>, GaError> {
+    match optimization_mode {
+        OptimizationMode::SingleObjective => {
+            let mut ranked = population.individuals.clone();
+            ranked.sort_by(single_objective_ordering);
+            Ok(ranked)
+        }
+        OptimizationMode::Nsga2 { .. } => Ok(nsga2::sorted_population(population)),
+    }
+}
+
+/// Returns the top-k survivors for the active optimization mode.
+pub fn select_survivors(
+    population: &Population,
+    optimization_mode: &OptimizationMode,
+    count: usize,
+) -> Result<Vec<Individual>, GaError> {
+    Ok(sort_survivors(population, optimization_mode)?
+        .into_iter()
+        .take(count)
+        .collect())
+}
+
 /// Internal helper for steady-state selection.
 fn steady_state_selection(population: &Population, num_parents: usize) -> Vec<Individual> {
     let mut ranked = population.individuals.clone();
-    ranked.sort_by(|left, right| {
-        right
-            .fitness_or_panic()
-            .partial_cmp(&left.fitness_or_panic())
-            .expect("fitness comparison failed")
-    });
+    ranked.sort_by(single_objective_ordering);
     ranked.into_iter().take(num_parents).collect()
 }
 
@@ -173,12 +199,7 @@ fn rank_selection(
     rng: &mut impl Rng,
 ) -> Vec<Individual> {
     let mut ranked = population.individuals.clone();
-    ranked.sort_by(|left, right| {
-        right
-            .fitness_or_panic()
-            .partial_cmp(&left.fitness_or_panic())
-            .expect("fitness comparison failed")
-    });
+    ranked.sort_by(single_objective_ordering);
 
     let weights = (1..=ranked.len())
         .rev()
@@ -235,14 +256,24 @@ fn positive_selection_weights(population: &Population) -> Option<(Vec<f64>, f64)
     }
 }
 
+fn single_objective_ordering(left: &Individual, right: &Individual) -> Ordering {
+    right
+        .fitness_or_panic()
+        .partial_cmp(&left.fitness_or_panic())
+        .expect("fitness comparison failed")
+}
+
 /// Chooses the better individual under NSGA-II tournament rules.
-fn nsga2_better<'a>(left: &'a Individual, right: &'a Individual) -> Result<&'a Individual, GaError> {
-    let left_rank = left.rank.ok_or_else(|| {
-        GaError::UnsupportedOperation("NSGA-II rank metadata is missing".into())
-    })?;
-    let right_rank = right.rank.ok_or_else(|| {
-        GaError::UnsupportedOperation("NSGA-II rank metadata is missing".into())
-    })?;
+fn nsga2_better<'a>(
+    left: &'a Individual,
+    right: &'a Individual,
+) -> Result<&'a Individual, GaError> {
+    let left_rank = left
+        .rank
+        .ok_or_else(|| GaError::UnsupportedOperation("NSGA-II rank metadata is missing".into()))?;
+    let right_rank = right
+        .rank
+        .ok_or_else(|| GaError::UnsupportedOperation("NSGA-II rank metadata is missing".into()))?;
 
     if left_rank != right_rank {
         return Ok(if left_rank < right_rank { left } else { right });

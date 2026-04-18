@@ -14,8 +14,8 @@ use crate::ga::core::{
 use crate::ga::engine::config::{EngineConfig, OptimizationMode};
 use crate::ga::error::GaError;
 use crate::ga::{
-    operators::crossover, operators::migration, operators::mutation, operators::selection,
-    operators::stop,
+    operators::crossover, operators::migration, operators::mutation, operators::nsga2,
+    operators::selection, operators::stop,
 };
 
 pub use crate::ga::engine::config::MigrationType;
@@ -95,8 +95,11 @@ impl EngineKernel {
     pub fn evaluate_population(&mut self) -> Result<(), GaError> {
         let evaluator = Arc::clone(&self.evaluator);
         let optimization_mode = self.config.optimization_mode.clone();
-        self.population
-            .evaluate_with(&optimization_mode, evaluator.as_ref())
+        nsga2::evaluate_population_with(
+            &mut self.population,
+            &optimization_mode,
+            evaluator.as_ref(),
+        )
     }
 
     /// Selects parents using the configured optimization mode.
@@ -165,7 +168,11 @@ impl EngineKernel {
 
         match self.config.optimization_mode {
             OptimizationMode::SingleObjective => {
-                let mut next_individuals = self.population.elite(self.config.elitism_count);
+                let mut next_individuals = selection::select_survivors(
+                    &self.population,
+                    &self.config.optimization_mode,
+                    self.config.elitism_count,
+                )?;
                 next_individuals.extend(offspring);
                 if next_individuals.len() > self.config.population_size {
                     next_individuals.truncate(self.config.population_size);
@@ -175,25 +182,28 @@ impl EngineKernel {
             }
             OptimizationMode::Nsga2 { .. } => {
                 let mut offspring_population = Population::new(offspring);
-                offspring_population
-                    .evaluate_with(&self.config.optimization_mode, self.evaluator.as_ref())?;
+                nsga2::evaluate_population_with(
+                    &mut offspring_population,
+                    &self.config.optimization_mode,
+                    self.evaluator.as_ref(),
+                )?;
 
                 let mut combined = self.population.individuals.clone();
                 combined.extend(offspring_population.individuals);
                 let mut combined_population = Population::new(combined);
-                combined_population.assign_nsga2_metadata()?;
+                nsga2::assign_population_metadata(&mut combined_population)?;
 
-                let survivors = combined_population
-                    .sorted_nsga2()?
+                let survivors = nsga2::sorted_population(&combined_population)
                     .into_iter()
                     .take(self.config.population_size)
                     .collect::<Vec<_>>();
                 self.population = Population::new(survivors);
-                self.population.assign_nsga2_metadata()?;
+                nsga2::assign_population_metadata(&mut self.population)?;
             }
         }
 
-        self.stats.record(&self.population, &self.config.optimization_mode)?;
+        self.stats
+            .record(&self.population, &self.config.optimization_mode)?;
         Ok(())
     }
 
@@ -201,7 +211,8 @@ impl EngineKernel {
     pub fn run(&mut self) -> Result<&RunStats, GaError> {
         self.initialize_population()?;
         self.evaluate_population()?;
-        self.stats.record(&self.population, &self.config.optimization_mode)?;
+        self.stats
+            .record(&self.population, &self.config.optimization_mode)?;
 
         loop {
             let should_stop = match self.config.optimization_mode {
@@ -212,9 +223,7 @@ impl EngineKernel {
                     &self.stats,
                     self.config.num_generations,
                 ),
-                OptimizationMode::Nsga2 { .. } => {
-                    self.generation >= self.config.num_generations
-                }
+                OptimizationMode::Nsga2 { .. } => self.generation >= self.config.num_generations,
             };
 
             if should_stop {
@@ -272,7 +281,8 @@ impl IslandEngine {
         F: Fn(&[GeneValue]) -> R + Send + Sync + 'static,
         R: IntoEvaluation,
     {
-        let evaluator: EvalFn = Arc::new(move |genes: &[GeneValue]| evaluator(genes).into_evaluation());
+        let evaluator: EvalFn =
+            Arc::new(move |genes: &[GeneValue]| evaluator(genes).into_evaluation());
         Self::from_evaluator(config, evaluator)
     }
 
@@ -337,7 +347,7 @@ impl IslandEngine {
                         .flat_map(|island| island.population.individuals.clone())
                         .collect(),
                 );
-                combined.assign_nsga2_metadata()?;
+                nsga2::assign_population_metadata(&mut combined)?;
 
                 let mut aggregate = self
                     .islands
@@ -419,7 +429,9 @@ impl IslandEngine {
                 .islands
                 .iter()
                 .enumerate()
-                .filter_map(|(index, island)| island.population.best().ok().map(|best| (index, best)))
+                .filter_map(|(index, island)| {
+                    island.population.best().ok().map(|best| (index, best))
+                })
                 .max_by(|(_, a), (_, b)| {
                     a.fitness_or_panic()
                         .partial_cmp(&b.fitness_or_panic())
@@ -439,9 +451,11 @@ impl IslandEngine {
                 .islands
                 .iter()
                 .enumerate()
-                .filter_map(|(index, island)| island.stats.best_fitness.map(|fitness| (index, fitness)))
-                .max_by(|(_, a), (_, b)| a.partial_cmp(b).expect("fitness comparison failed")))
-                ?.ok_or(GaError::EmptyPopulation),
+                .filter_map(|(index, island)| {
+                    island.stats.best_fitness.map(|fitness| (index, fitness))
+                })
+                .max_by(|(_, a), (_, b)| a.partial_cmp(b).expect("fitness comparison failed")))?
+            .ok_or(GaError::EmptyPopulation),
             OptimizationMode::Nsga2 { .. } => Err(GaError::UnsupportedOperation(
                 "best_fitness is unavailable in NSGA-II mode; use pareto_front instead".into(),
             )),
@@ -461,7 +475,7 @@ impl IslandEngine {
                         .flat_map(|island| island.population.individuals.clone())
                         .collect(),
                 );
-                combined.assign_nsga2_metadata()?;
+                nsga2::assign_population_metadata(&mut combined)?;
                 Ok(combined
                     .pareto_front()
                     .iter()
@@ -496,7 +510,8 @@ impl EvolutionEngine {
         F: Fn(&[GeneValue]) -> R + Send + Sync + 'static,
         R: IntoEvaluation,
     {
-        let evaluator: EvalFn = Arc::new(move |genes: &[GeneValue]| evaluator(genes).into_evaluation());
+        let evaluator: EvalFn =
+            Arc::new(move |genes: &[GeneValue]| evaluator(genes).into_evaluation());
         let backend = if config.num_islands > 1 {
             EngineBackend::Island(IslandEngine::from_evaluator(config, evaluator)?)
         } else {

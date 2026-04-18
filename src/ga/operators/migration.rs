@@ -1,8 +1,8 @@
 /// Migration topology helpers for island-model evolution.
-
 use crate::ga::core::individual::Individual;
 use crate::ga::engine::config::OptimizationMode;
 use crate::ga::engine::engine::EngineKernel;
+use crate::ga::operators::{nsga2, selection};
 
 /// Migration topology used to route emigrants.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -37,15 +37,9 @@ pub fn migrate(
 
     let emigrants: Vec<Vec<Individual>> = islands
         .iter()
-        .map(|island| match optimization_mode {
-            OptimizationMode::SingleObjective => island.population.elite(k),
-            OptimizationMode::Nsga2 { .. } => island
-                .population
-                .sorted_nsga2()
-                .expect("NSGA-II migration requires ranking metadata")
-                .into_iter()
-                .take(k)
-                .collect(),
+        .map(|island| {
+            selection::select_survivors(&island.population, optimization_mode, k)
+                .expect("survivor selection should succeed during migration")
         })
         .collect();
 
@@ -53,15 +47,9 @@ pub fn migrate(
         let neighbors = destinations(migration_type, src, n);
         for &dst in &neighbors {
             let island = &mut islands[dst];
-            match optimization_mode {
-                OptimizationMode::SingleObjective => island.population.sort_by_fitness_desc(),
-                OptimizationMode::Nsga2 { .. } => {
-                    island.population.individuals = island
-                        .population
-                        .sorted_nsga2()
-                        .expect("NSGA-II migration requires ranking metadata");
-                }
-            }
+            island.population.individuals =
+                selection::sort_survivors(&island.population, optimization_mode)
+                    .expect("survivor ordering should succeed during migration");
 
             let pop_len = island.population.individuals.len();
             let replace_start = pop_len.saturating_sub(k);
@@ -72,9 +60,7 @@ pub fn migrate(
             }
 
             if matches!(optimization_mode, OptimizationMode::Nsga2 { .. }) {
-                island
-                    .population
-                    .assign_nsga2_metadata()
+                nsga2::assign_population_metadata(&mut island.population)
                     .expect("NSGA-II migration re-ranking should succeed");
             }
         }

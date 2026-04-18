@@ -1,8 +1,8 @@
 pub mod ga;
 
 pub use ga::analysis::report::ExperimentSummary;
-pub use ga::analysis::visualize::VisualizationOptions;
 pub use ga::analysis::report::ParetoExperimentSummary;
+pub use ga::analysis::visualize::VisualizationOptions;
 pub use ga::core::evaluation::Evaluation;
 pub use ga::core::gene::{GeneDomain, GeneScalarType, GeneValue, GenesDomain, GenesValueType};
 pub use ga::core::pareto::ParetoSolution;

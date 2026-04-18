@@ -1,6 +1,6 @@
 use genetic_algorithm_rust::ga::core::{individual::Individual, population::Population};
-use genetic_algorithm_rust::ga::operators::selection;
-use genetic_algorithm_rust::{Evaluation, GeneValue, SelectionType};
+use genetic_algorithm_rust::ga::operators::{nsga2, selection};
+use genetic_algorithm_rust::{Evaluation, GeneValue, OptimizationMode, SelectionType};
 use rand::{SeedableRng, rngs::StdRng};
 
 fn population() -> Population {
@@ -63,5 +63,39 @@ fn stochastic_universal_selection_returns_valid_parents() {
         parents
             .iter()
             .all(|parent| parent.genes.len() == 2 && parent.evaluation.is_some())
+    );
+}
+
+#[test]
+fn select_survivors_uses_single_objective_priority() {
+    let survivors =
+        selection::select_survivors(&population(), &OptimizationMode::SingleObjective, 2).unwrap();
+
+    assert_eq!(survivors.len(), 2);
+    assert_eq!(survivors[0].evaluation, Some(Evaluation::Single(4.0)));
+    assert_eq!(survivors[1].evaluation, Some(Evaluation::Single(3.0)));
+}
+
+#[test]
+fn select_survivors_uses_nsga2_priority() {
+    let mut population = Population::new(vec![
+        Individual::with_objectives(vec![GeneValue::F64(0.0)], vec![0.1, 0.2]),
+        Individual::with_objectives(vec![GeneValue::F64(1.0)], vec![0.2, 0.4]),
+        Individual::with_objectives(vec![GeneValue::F64(2.0)], vec![0.4, 0.1]),
+    ]);
+    nsga2::assign_population_metadata(&mut population).unwrap();
+
+    let survivors = selection::select_survivors(
+        &population,
+        &OptimizationMode::Nsga2 { num_objectives: 2 },
+        2,
+    )
+    .unwrap();
+
+    assert_eq!(survivors.len(), 2);
+    assert!(
+        survivors
+            .iter()
+            .all(|individual| individual.rank == Some(0))
     );
 }

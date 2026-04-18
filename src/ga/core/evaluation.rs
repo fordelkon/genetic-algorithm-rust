@@ -1,5 +1,5 @@
-use crate::ga::error::GaError;
 use crate::ga::engine::config::OptimizationMode;
+use crate::ga::error::GaError;
 
 /// Unified evaluation payload for single- and multi-objective optimization.
 #[derive(Debug, Clone, PartialEq)]
@@ -35,9 +35,11 @@ impl Evaluation {
     pub fn validate_for_mode(&self, optimization_mode: &OptimizationMode) -> Result<(), GaError> {
         match (optimization_mode, self) {
             (OptimizationMode::SingleObjective, Evaluation::Single(_)) => Ok(()),
-            (OptimizationMode::SingleObjective, Evaluation::Multi(_)) => Err(GaError::InvalidConfig(
-                "single-objective mode requires evaluators that return a scalar fitness".into(),
-            )),
+            (OptimizationMode::SingleObjective, Evaluation::Multi(_)) => {
+                Err(GaError::InvalidConfig(
+                    "single-objective mode requires evaluators that return a scalar fitness".into(),
+                ))
+            }
             (OptimizationMode::Nsga2 { num_objectives }, Evaluation::Multi(values))
                 if values.len() == *num_objectives =>
             {
